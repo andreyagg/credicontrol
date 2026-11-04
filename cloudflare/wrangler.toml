@@ -8,4 +8,4 @@ bucket_name = "credicontrol"
 
 [vars]
 FIREBASE_PROJECT_ID = "micarteradeprestamos"
-ALLOWED_ORIGINS = "https://replace-with-your-vercel-domain.vercel.app"
+ALLOWED_ORIGINS = "https://app-credicontrol.vercel.app"
