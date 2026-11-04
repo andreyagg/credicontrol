@@ -1,0 +1,1 @@
+window.CREDICONTROL_STORAGE_API_URL = '';

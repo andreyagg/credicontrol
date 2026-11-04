@@ -56,13 +56,13 @@
                 <label for="authPassword" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Contraseña</label>
                 <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
             </div>
-            <p id="lockScreenError" role="alert" class="hidden text-sm text-rose-600"></p>
+            <p id="lockScreenError" role="status" aria-live="polite" class="hidden text-sm"></p>
             <button id="lockScreenSubmit" type="submit" class="w-full rounded-xl bg-blue-700 px-4 py-3 font-bold text-white transition hover:bg-blue-800">Iniciar sesión</button>
             <div class="flex flex-col gap-2 text-center">
                 <button id="authModeToggle" type="button" onclick="toggleFirebaseAuthMode()" class="text-xs font-semibold text-blue-700 hover:text-blue-900">¿Primera vez? Crear cuenta</button>
                 <button id="authPasswordReset" type="button" onclick="resetFirebasePassword()" class="text-xs text-slate-500 hover:text-slate-700">Olvidé mi contraseña</button>
             </div>
-            <p class="text-center text-[11px] text-slate-400">Sus datos y archivos se guardan en su cuenta Firebase.</p>
+            <p class="text-center text-[11px] text-slate-400">Sus préstamos se guardan en Firebase y sus archivos privados en Cloudflare.</p>
         </form>
     </div>
 
@@ -642,7 +642,7 @@
                 <div id="modalProofPreview" class="text-xs text-blue-600 font-medium pt-1"></div>
                 <button id="modalViewProofButton" type="button" onclick="viewPaymentProof()" class="hidden mt-2 text-xs font-bold text-blue-700 hover:text-blue-900 underline underline-offset-2">Visualizar comprobante</button>
                 <button id="modalRemoveProofButton" type="button" onclick="removePaymentProofFromPaymentModal()" class="hidden mt-2 ml-3 text-xs font-bold text-rose-700 hover:text-rose-900 underline underline-offset-2">Quitar comprobante</button>
-                <p class="mt-1 text-[11px] text-slate-400">Se guarda en su cuenta Firebase. Máximo 10 MB por archivo.</p>
+                <p class="mt-1 text-[11px] text-slate-400">Se guarda en Cloudflare R2 privado. Máximo 10 MB por archivo.</p>
             </div>
             <div class="flex justify-end gap-2 pt-2">
                 <button onclick="closePaymentModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancelar</button>
@@ -772,17 +772,16 @@
     </div>
 
     <!-- FIREBASE MODULES INTEGRATION -->
+    <script src="storage-config.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getBlob, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAbZHWpDR8I04tRbTzKeRrI0hmdscuuDQI",
             authDomain: "micarteradeprestamos.firebaseapp.com",
             projectId: "micarteradeprestamos",
-            storageBucket: "micarteradeprestamos.firebasestorage.app",
             messagingSenderId: "437246406832",
             appId: "1:437246406832:web:d0005123ada6052166cb75",
             measurementId: "G-82BHVYFPCV"
@@ -792,7 +791,6 @@
         
         let db = null;
         let auth = null;
-        let storage = null;
         let clientsUnsubscribe = null;
         const clientSaveQueues = new Map();
         const readyUserIds = new Set();
@@ -827,17 +825,29 @@
         }
 
         async function migrateLegacyPaymentProofs(client, user) {
+            let migrated = false;
+            let migrationFailed = false;
             for (const loan of client.loans || []) {
                 for (const payment of Object.values(loan.paymentsInfo || {})) {
                     if (!payment.proofStorageKey || payment.proofStoragePath || !window.loadLegacyPaymentProof) continue;
-                    const legacyProof = await window.loadLegacyPaymentProof(payment.proofStorageKey);
-                    if (!legacyProof?.file) continue;
-                    const proofPath = `artifacts/${appId}/users/${user.uid}/clients/${client.id}/loans/${loan.id}/payments/${Date.now()}_legacy-proof`;
-                    await window.uploadFileToFirebase(proofPath, legacyProof.file);
-                    payment.proofStoragePath = proofPath;
-                    delete payment.proofStorageKey;
+                    try {
+                        const legacyProof = await window.loadLegacyPaymentProof(payment.proofStorageKey);
+                        if (!legacyProof?.file) continue;
+                        const proofPath = `artifacts/${appId}/users/${user.uid}/clients/${client.id}/loans/${loan.id}/payments/${Date.now()}_legacy-proof`;
+                        await window.uploadPrivateFile(proofPath, legacyProof.file);
+                        payment.proofStoragePath = proofPath;
+                        delete payment.proofStorageKey;
+                        migrated = true;
+                    } catch (error) {
+                        migrationFailed = true;
+                        console.error('Could not migrate a legacy payment proof to Cloudflare R2:', error);
+                    }
                 }
             }
+            if (migrationFailed && window.showToast) {
+                window.showToast('No se pudieron migrar algunos comprobantes antiguos. Puede volver a adjuntarlos desde el pago correspondiente.');
+            }
+            return migrated;
         }
 
         async function loadUserClients(user, stateVersion) {
@@ -868,6 +878,13 @@
             } else {
                 window.clientsData = cloudSnapshot.docs.map(clientDoc => ({ id: clientDoc.id, ...clientDoc.data() }));
                 localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+                for (const client of window.clientsData) {
+                    if (stateVersion !== authStateVersion) return false;
+                    if (await migrateLegacyPaymentProofs(client, user)) {
+                        if (stateVersion !== authStateVersion) return false;
+                        await setDoc(doc(userClients, client.id), client);
+                    }
+                }
             }
             if (stateVersion !== authStateVersion) return false;
             localStorage.setItem('cartera_prestamos_owner_uid', user.uid);
@@ -927,44 +944,80 @@
             }
         };
 
-        window.firebaseClientStoragePath = function(clientId, relativePath) {
+        window.clientPrivateStoragePath = function(clientId, relativePath) {
             const user = auth?.currentUser;
-            if (!user || user.isAnonymous) throw new Error('Inicie sesión para guardar archivos en Firebase.');
+            if (!user || user.isAnonymous) throw new Error('Inicie sesión para guardar archivos.');
             return `artifacts/${appId}/users/${user.uid}/clients/${clientId}/${relativePath}`;
         };
 
-        window.uploadFileToFirebase = async function(path, file) {
+        async function requestPrivateStorage(method, path, file) {
             const user = auth?.currentUser;
-            if (!user || user.isAnonymous || !storage) throw new Error('Inicie sesión para guardar archivos en Firebase.');
+            if (!user || user.isAnonymous) throw new Error('Inicie sesión para acceder a sus archivos.');
+            const apiUrl = window.CREDICONTROL_STORAGE_API_URL;
+            if (typeof apiUrl !== 'string' || !apiUrl.trim()) {
+                throw new Error('Falta configurar la URL del servicio privado de Cloudflare en storage-config.js.');
+            }
+            let endpoint;
+            try {
+                endpoint = new URL(apiUrl);
+            } catch {
+                throw new Error('La URL del servicio de archivos de Cloudflare no es válida.');
+            }
+            if (endpoint.protocol !== 'https:') {
+                throw new Error('El servicio de archivos debe usar una URL HTTPS.');
+            }
+            if (endpoint.pathname !== '/' || endpoint.search || endpoint.hash) {
+                throw new Error('Configure solo el dominio del servicio de archivos, sin ruta ni parámetros.');
+            }
+            const userPrefix = `artifacts/${appId}/users/${user.uid}/clients/`;
+            if (typeof path !== 'string' || !path.startsWith(userPrefix)) {
+                throw new Error('La ruta del archivo no pertenece a la cuenta actual.');
+            }
+            const token = await user.getIdToken();
+            const url = new URL('files', endpoint.href.endsWith('/') ? endpoint.href : `${endpoint.href}/`);
+            url.searchParams.set('path', path);
+            const headers = { Authorization: `Bearer ${token}` };
+            if (file) headers['Content-Type'] = file.type;
+            let response;
+            try {
+                response = await fetch(url, { method, headers, body: file || undefined });
+            } catch (error) {
+                console.error('Could not reach the Cloudflare private storage service:', error);
+                throw new Error('No se pudo conectar con Cloudflare. Revise que el Worker esté desplegado y permita el dominio de esta aplicación.');
+            }
+            if (!response.ok) {
+                let message = `El servicio de archivos respondió con error (${response.status}).`;
+                try {
+                    const errorBody = await response.json();
+                    if (typeof errorBody.error === 'string') message = errorBody.error;
+                } catch (error) {
+                    console.error('Could not read the private storage error response:', error);
+                }
+                throw new Error(message);
+            }
+            return response;
+        }
+
+        window.uploadPrivateFile = async function(path, file) {
             if (!(file instanceof File) || file.size === 0 || file.size > 10 * 1024 * 1024) {
                 throw new Error('El archivo está vacío o supera el límite de 10 MB.');
             }
             if (!(file.type.startsWith('image/') || file.type === 'application/pdf')) {
                 throw new Error('Solo se permiten imágenes y documentos PDF.');
             }
-            const userPrefix = `artifacts/${appId}/users/${user.uid}/clients/`;
-            if (!path.startsWith(userPrefix)) throw new Error('La ruta del archivo no pertenece a la cuenta actual.');
-            const result = await uploadBytes(ref(storage, path), file, {
-                contentType: file.type,
-                customMetadata: { originalName: file.name }
-            });
-            return result.ref.fullPath;
+            const response = await requestPrivateStorage('POST', path, file);
+            const result = await response.json();
+            if (result.path !== path) throw new Error('El servicio guardó una ruta de archivo inesperada.');
+            return result.path;
         };
 
-        window.loadFileFromFirebase = async function(path) {
-            const user = auth?.currentUser;
-            if (!user || user.isAnonymous || !storage) throw new Error('Inicie sesión para ver los archivos de Firebase.');
-            const userPrefix = `artifacts/${appId}/users/${user.uid}/clients/`;
-            if (!path?.startsWith(userPrefix)) throw new Error('La ruta del archivo no pertenece a la cuenta actual.');
-            return getBlob(ref(storage, path));
+        window.loadPrivateFile = async function(path) {
+            const response = await requestPrivateStorage('GET', path);
+            return response.blob();
         };
 
-        window.deleteFileFromFirebase = async function(path) {
-            const user = auth?.currentUser;
-            if (!user || user.isAnonymous || !storage) throw new Error('Inicie sesión para eliminar archivos de Firebase.');
-            const userPrefix = `artifacts/${appId}/users/${user.uid}/clients/`;
-            if (!path?.startsWith(userPrefix)) throw new Error('La ruta del archivo no pertenece a la cuenta actual.');
-            await deleteObject(ref(storage, path));
+        window.deletePrivateFile = async function(path) {
+            await requestPrivateStorage('DELETE', path);
         };
 
         function getDefaultClientsData() {
@@ -1007,7 +1060,6 @@
                 persistence: [indexedDBLocalPersistence, browserLocalPersistence]
             });
             db = getFirestore(app);
-            storage = getStorage(app);
             window.db = db;
 
             onAuthStateChanged(auth, async user => {
@@ -1097,6 +1149,18 @@
         function showLockError(message) {
             const error = document.getElementById('lockScreenError');
             error.textContent = message;
+            error.setAttribute('role', 'alert');
+            error.classList.remove('text-emerald-700');
+            error.classList.add('text-rose-600');
+            error.classList.remove('hidden');
+        }
+
+        function showLockSuccess(message) {
+            const error = document.getElementById('lockScreenError');
+            error.textContent = message;
+            error.setAttribute('role', 'status');
+            error.classList.remove('text-rose-600');
+            error.classList.add('text-emerald-700');
             error.classList.remove('hidden');
         }
 
@@ -1125,7 +1189,10 @@
                 'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
                 'auth/operation-not-allowed': 'Active el proveedor Correo/Contraseña en Firebase Authentication.',
                 'auth/network-request-failed': 'No se pudo conectar. Verifique su conexión a internet.',
-                'permission-denied': 'Firebase denegó el acceso. Revise las reglas de Firestore y Storage.'
+                'auth/too-many-requests': 'Se hicieron demasiados intentos. Espere un momento y vuelva a intentarlo.',
+                'auth/user-not-found': 'Si existe una cuenta con ese correo, recibirá un enlace para restablecer la contraseña.',
+                'auth/missing-email': 'Ingrese un correo electrónico válido.',
+                'permission-denied': 'Firebase denegó el acceso. Revise las reglas de Firestore.'
             };
             return messages[error.code] || error.message || 'No se pudo completar el acceso a Firebase.';
         }
@@ -1161,12 +1228,20 @@
                 document.getElementById('authEmail').focus();
                 return;
             }
+            const resetButton = document.getElementById('authPasswordReset');
+            resetButton.disabled = true;
+            resetButton.textContent = 'Enviando enlace…';
+            document.getElementById('lockScreenError').classList.add('hidden');
             try {
                 if (!window.firebasePasswordReset) throw new Error('Firebase aún se está inicializando. Intente de nuevo.');
                 await window.firebasePasswordReset(email);
-                showLockError('Se envió un enlace de recuperación a su correo.');
+                showLockSuccess('Si existe una cuenta con ese correo, recibirá un enlace para restablecer la contraseña. Revise también la carpeta de correo no deseado.');
             } catch (error) {
+                console.error('Firebase password reset error:', error);
                 showLockError(getFirebaseAuthErrorMessage(error));
+            } finally {
+                resetButton.disabled = false;
+                resetButton.textContent = 'Olvidé mi contraseña';
             }
         }
 
@@ -1766,11 +1841,11 @@
 
             document.getElementById('idDocPreview').textContent = client.idDocName ? `📄 ${client.idDocName}` : '';
             document.getElementById('idDocBadge').textContent = client.idDocStoragePath
-                ? 'En Firebase'
+                ? 'En Cloudflare'
                 : client.idDocName ? 'Vuelva a adjuntar' : 'Sin Archivo';
             document.getElementById('patronalDocPreview').textContent = client.patronalDocName ? `📄 ${client.patronalDocName}` : '';
             document.getElementById('patronalDocBadge').textContent = client.patronalDocStoragePath
-                ? 'En Firebase'
+                ? 'En Cloudflare'
                 : client.patronalDocName ? 'Vuelva a adjuntar' : 'Sin Archivo';
             document.getElementById('idDocViewButton').classList.toggle('hidden', !client.idDocStoragePath);
             document.getElementById('patronalDocViewButton').classList.toggle('hidden', !client.patronalDocStoragePath);
@@ -1789,23 +1864,23 @@
             let uploadedPath = '';
             document.getElementById(badgeId).textContent = 'Subiendo…';
             try {
-                const path = window.firebaseClientStoragePath(client.id, `documents/${isIdentityDocument ? 'identity' : 'income'}/${Date.now()}`);
-                uploadedPath = await window.uploadFileToFirebase(path, file);
+                const path = window.clientPrivateStoragePath(client.id, `documents/${isIdentityDocument ? 'identity' : 'income'}/${Date.now()}`);
+                uploadedPath = await window.uploadPrivateFile(path, file);
                 client[nameProperty] = file.name;
                 client[pathProperty] = uploadedPath;
                 await saveToStorage();
                 if (previousPath && previousPath !== uploadedPath) {
                     try {
-                        await window.deleteFileFromFirebase(previousPath);
+                        await window.deletePrivateFile(previousPath);
                     } catch (error) {
                         console.error('Previous client document cleanup error:', error);
                         showToast(`El documento nuevo se guardó, pero no se pudo borrar el anterior: ${error.message}`);
                     }
                 }
                 document.getElementById(previewId).textContent = `📄 ${file.name}`;
-                document.getElementById(badgeId).textContent = 'En Firebase';
+                document.getElementById(badgeId).textContent = 'En Cloudflare';
                 document.getElementById(isIdentityDocument ? 'idDocViewButton' : 'patronalDocViewButton').classList.remove('hidden');
-                showToast('Documento guardado en Firebase');
+                showToast('Documento guardado en Cloudflare R2');
             } catch (error) {
                 client[nameProperty] = previousName;
                 client[pathProperty] = previousPath;
@@ -1817,15 +1892,15 @@
                 }
                 if (uploadedPath) {
                     try {
-                        await window.deleteFileFromFirebase(uploadedPath);
+                        await window.deletePrivateFile(uploadedPath);
                     } catch (cleanupError) {
                         console.error('Could not clean up an unreferenced client document:', cleanupError);
-                        showToast(`No se guardaron los datos del documento y quedó un archivo sin referencia en Firebase: ${cleanupError.message}`);
+                        showToast(`No se guardaron los datos del documento y quedó un archivo sin referencia en Cloudflare R2: ${cleanupError.message}`);
                     }
                 }
-                document.getElementById(badgeId).textContent = previousPath ? 'En Firebase' : previousName ? 'Vuelva a adjuntar' : 'Sin Archivo';
+                document.getElementById(badgeId).textContent = previousPath ? 'En Cloudflare' : previousName ? 'Vuelva a adjuntar' : 'Sin Archivo';
                 console.error('Client document upload error:', error);
-                showToast(`No se pudo guardar el documento en Firebase: ${error.message}`);
+                showToast(`No se pudo guardar el documento en Cloudflare R2: ${error.message}`);
             }
         }
 
@@ -1835,11 +1910,11 @@
             const path = client?.[isIdentityDocument ? 'idDocStoragePath' : 'patronalDocStoragePath'];
             const name = client?.[isIdentityDocument ? 'idDocName' : 'patronalDocName'];
             if (!path) {
-                showToast('Este documento no está guardado en Firebase. Vuelva a adjuntarlo para sincronizarlo.');
+                showToast('Este documento no está guardado en Cloudflare R2. Vuelva a adjuntarlo para sincronizarlo.');
                 return;
             }
             try {
-                const file = await window.loadFileFromFirebase(path);
+                const file = await window.loadPrivateFile(path);
                 showPaymentProof(file, name);
             } catch (error) {
                 console.error('Client document download error:', error);
@@ -2109,14 +2184,14 @@
         }
 
         async function storePaymentProof(path, file) {
-            return window.uploadFileToFirebase(path, file);
+            return window.uploadPrivateFile(path, file);
         }
 
         async function removePaymentProofsForLoan(loan) {
             const payments = Object.values(loan.paymentsInfo || {});
             const cloudPaths = payments.map(payment => payment.proofStoragePath).filter(Boolean);
             const legacyKeys = payments.map(payment => payment.proofStorageKey).filter(Boolean);
-            await Promise.all(cloudPaths.map(path => window.deleteFileFromFirebase(path)));
+            await Promise.all(cloudPaths.map(path => window.deletePrivateFile(path)));
             if (legacyKeys.length === 0) return;
 
             const database = await openPaymentProofDatabase();
@@ -2141,7 +2216,7 @@
 
         async function deletePaymentProof(key) {
             if (key.startsWith('artifacts/')) {
-                await window.deleteFileFromFirebase(key);
+                await window.deletePrivateFile(key);
                 return;
             }
             const database = await openPaymentProofDatabase();
@@ -2164,7 +2239,7 @@
         }
 
         async function loadPaymentProof(key) {
-            if (key.startsWith('artifacts/')) return window.loadFileFromFirebase(key);
+            if (key.startsWith('artifacts/')) return window.loadPrivateFile(key);
             const database = await openPaymentProofDatabase();
             return new Promise((resolve, reject) => {
                 const transaction = database.transaction(PAYMENT_PROOF_STORE_NAME, 'readonly');
@@ -2188,7 +2263,7 @@
 
         /*
          * Legacy IndexedDB records remain readable so existing receipts can be migrated
-         * to Firebase when the user signs into the same browser.
+         * to private Cloudflare storage when the user signs into the same browser.
          */
 
         function isSupportedProofFile(file) {
@@ -2360,7 +2435,7 @@
             let uploadedProofPath = '';
             if (selectedFile) {
                 try {
-                    uploadedProofPath = window.firebaseClientStoragePath(
+                    uploadedProofPath = window.clientPrivateStoragePath(
                         window.currentClientId,
                         `loans/${loanObj.id}/payments/${row.cuotaNum}/${Date.now()}`
                     );
@@ -2405,7 +2480,7 @@
                 }
                 if (uploadedProofPath) {
                     try {
-                        await window.deleteFileFromFirebase(uploadedProofPath);
+                        await window.deletePrivateFile(uploadedProofPath);
                     } catch (cleanupError) {
                         console.error('Could not clean up an unreferenced payment proof:', cleanupError);
                     }
@@ -2415,7 +2490,7 @@
             }
             if (uploadedProofPath && previousInfo.proofStoragePath && previousInfo.proofStoragePath !== uploadedProofPath) {
                 try {
-                    await window.deleteFileFromFirebase(previousInfo.proofStoragePath);
+                    await window.deletePrivateFile(previousInfo.proofStoragePath);
                 } catch (error) {
                     console.error('Could not remove the replaced payment proof:', error);
                     showToast(`El pago se guardó, pero no se pudo borrar el comprobante anterior: ${error.message}`);

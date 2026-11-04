@@ -1,40 +1,57 @@
 # CrediControl
 
-CrediControl is a static web application. The site is served from `index.html`; it does not need a build step or a Node.js server to run on Vercel.
+CrediControl is a static web application hosted on Vercel. Client and loan records use Cloud Firestore, account access and password recovery use Firebase Authentication, and private receipts/documents are stored in Cloudflare R2 through an authenticated Cloudflare Worker.
 
-## Deploy to Vercel
+## Deploy the site to Vercel
 
-1. Push the project files to a GitHub repository. Include `index.html`, `firebase.json`, `firestore.rules`, `storage.rules`, and `.firebaserc`.
-2. In Vercel, choose **Add New → Project** and import the GitHub repository.
-3. Use these project settings:
-   - **Framework Preset:** Other
-   - **Root Directory:** `./`
-   - **Build Command:** leave empty
-   - **Output Directory:** leave empty
-   - **Install Command:** leave empty
-4. Deploy. Vercel will serve `index.html` from the project root.
+1. Import this GitHub repository into Vercel.
+2. Select **Other** as the framework preset and leave the build, install, and output-directory settings empty.
+3. Deploy the site. Vercel serves `index.html` from the repository root.
+4. Copy the production origin, such as `https://credicontrol.vercel.app`, for the Cloudflare Worker configuration below.
 
-No Vercel environment variables are required: Firebase is initialized in the browser. The Firebase web configuration in `index.html` identifies the project; it is not a service-account credential. Do not put service-account keys, private keys, passwords, customer exports, or other private data in this repository.
+## Configure Firebase Authentication and Firestore
 
-## Firebase setup
+1. In the Firebase console for `micarteradeprestamos`, enable **Authentication → Sign-in method → Email/Password**.
+2. Under **Authentication → Settings → Authorized domains**, add the Vercel production domain and any custom domain.
+3. Ensure Cloud Firestore is enabled.
+4. From the project root in Cloud Shell, deploy only Firestore rules:
 
-The app uses Firebase Authentication, Cloud Firestore, and Cloud Storage.
-
-1. In the Firebase console for the project selected in `.firebaserc`, enable **Email/Password** under Authentication providers.
-2. Create or enable the Firestore database and Firebase Storage bucket.
-3. From this project directory, authenticate the Firebase CLI and deploy the repository's rules:
-
-   ```powershell
+   ```bash
+   git clone https://github.com/andreyagg/credicontrol.git
+   cd credicontrol
    firebase login
-   firebase deploy --only firestore:rules,storage
+   firebase deploy --only firestore:rules
    ```
 
-   Check `.firebaserc` before deploying: it selects the Firebase project that will receive the rules.
-4. After the first Vercel deployment, add its domain (for example, `your-project.vercel.app`) to **Firebase Authentication → Settings → Authorized domains**. Add any custom domain there as well.
-5. Test account creation, sign-in, client/loan synchronization, and file upload with the deployed site before entering real customer information.
+Password reset stays with Firebase Authentication. On the login screen, choose **Olvidé mi contraseña**, enter the account email, and follow the reset link Firebase sends. Configure the reset email template in **Firebase Authentication → Templates** if you want to customize its wording and sender.
 
-The Firestore and Storage rules authorize only signed-in users using the Email/Password provider and scope records/files to that user's UID. Keep these rules deployed; the Firebase web configuration alone does not protect customer data.
+## Configure Cloudflare R2 private file storage
 
-## Existing data
+The app does not use Firebase Storage. The R2 bucket is private and is accessed only through the Worker, which verifies Firebase ID tokens and restricts every object path to the authenticated user's UID. Do not make the bucket public or put Cloudflare API tokens in browser code.
 
-Data already synced to Firebase remains associated with the same Firebase account. Browser-only data is isolated by browser origin, so it does not automatically move from a local `file://` copy to the Vercel domain. Before switching, sign in to the local app while online and confirm it reports that Firebase is connected and has finished syncing. The app's JSON backup is an export, not an import tool; keep it in a safe location and do not commit it to GitHub.
+1. In Cloudflare, open **R2 Object Storage** and create a private bucket named `credicontrol-files`.
+2. Edit `cloudflare/wrangler.toml`:
+   - Set `ALLOWED_ORIGINS` to the exact Vercel production origin, without a trailing slash. You may comma-separate explicitly trusted custom domains. Do not use `*`.
+   - Confirm `FIREBASE_PROJECT_ID` is `micarteradeprestamos`.
+3. From the repository root, authenticate Wrangler and deploy the Worker:
+
+   ```bash
+   npx wrangler login
+   npx wrangler deploy --config cloudflare/wrangler.toml
+   ```
+
+   The config binds the private bucket to the Worker. Copy the HTTPS `workers.dev` URL reported after deployment.
+4. Put that URL in `storage-config.js` as the base URL:
+
+   ```js
+   window.CREDICONTROL_STORAGE_API_URL = 'https://credicontrol-storage.YOUR-SUBDOMAIN.workers.dev';
+   ```
+
+   Use the URL Wrangler actually reports; do not include a path, query string, or secret.
+5. Commit and push the updated `cloudflare/wrangler.toml` and `storage-config.js` to GitHub. Vercel will redeploy the site. If you change Vercel domains, update `ALLOWED_ORIGINS` and redeploy the Worker.
+
+Cloudflare R2 and Vercel usage may incur charges if included quotas are exceeded. Review the current [Cloudflare R2 pricing](https://developers.cloudflare.com/r2/pricing/) and [Vercel pricing](https://vercel.com/pricing), and set billing alerts where available.
+
+## Existing files and data
+
+Firestore records remain in Firebase. Files that existed only in a browser's IndexedDB can be migrated when that same browser signs in and synchronizes; older Firebase Storage files are not copied automatically to R2 and must be reattached or migrated separately. Browser-local data does not automatically transfer between a `file://` copy and the Vercel domain. The in-app JSON backup is an export only; store it securely and do not commit it to GitHub.
