@@ -1,0 +1,18 @@
+# Local tools and dependencies
+node_modules/
+.firebase/
+.vercel/
+
+# Environment files and logs
+.env
+.env.*
+!.env.example
+*.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini

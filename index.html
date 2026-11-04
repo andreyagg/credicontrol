@@ -1,0 +1,2726 @@
+<!DOCTYPE html>
+<html lang="es-CR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor Multi-Cliente de Préstamos y Cartera - CrediControl</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librería html2pdf.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .overflow-y-auto, .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+        #pdfContent { font-size: 13px; line-height: 1.5; }
+        #pdfContent .pdf-section-title { margin-bottom: 0.6rem; font-size: 12px; letter-spacing: 0.04em; }
+        #pdfContent .pdf-details-table { font-size: 12px; }
+        #pdfContent .pdf-details-table th,
+        #pdfContent .pdf-details-table td { padding: 0.45rem 0.5rem; }
+        #pdfTableBody tr { break-inside: avoid; page-break-inside: avoid; }
+        #pdfTableBody td { white-space: nowrap; }
+        @media print {
+            #pdfContent { padding: 12mm !important; color: #0f172a !important; font-size: 12px !important; }
+            #pdfContent table { border-collapse: collapse !important; }
+            #pdfContent thead { display: table-header-group; }
+            #pdfTableBody tr { break-inside: avoid; page-break-inside: avoid; }
+            #pdfContent .pdf-summary-table td,
+            #pdfContent .pdf-details-table th,
+            #pdfContent .pdf-details-table td { border: 1px solid #cbd5e1 !important; }
+        }
+        @media print {
+            .no-print, #mainContainer, #mobileBottomNav, #desktopSidebar { display: none !important; }
+            #pdfModal { 
+                position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: auto !important; background: white !important; padding: 0 !important; display: block !important;
+            }
+            #pdfModal > div { box-shadow: none !important; max-width: 100% !important; margin: 0 !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; color: black !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-2 sm:p-4 md:p-6 pb-24 md:pb-6">
+
+    <div id="startupLockScreen" class="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center p-4">
+        <form id="startupLockForm" autocomplete="on" onsubmit="event.preventDefault(); submitFirebaseAuth();" class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4">
+            <div class="text-center">
+                <div class="mx-auto mb-3 w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center text-2xl">🔒</div>
+                <h1 id="lockScreenTitle" class="text-xl font-bold text-slate-900">Acceder a CrediControl</h1>
+                <p id="lockScreenDescription" class="text-sm text-slate-500 mt-1">Inicie sesión para sincronizar sus datos y documentos.</p>
+            </div>
+            <div>
+                <label for="authEmail" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Correo electrónico</label>
+                <input id="authEmail" type="email" autocomplete="username" required class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label for="authPassword" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Contraseña</label>
+                <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required class="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+            <p id="lockScreenError" role="alert" class="hidden text-sm text-rose-600"></p>
+            <button id="lockScreenSubmit" type="submit" class="w-full rounded-xl bg-blue-700 px-4 py-3 font-bold text-white transition hover:bg-blue-800">Iniciar sesión</button>
+            <div class="flex flex-col gap-2 text-center">
+                <button id="authModeToggle" type="button" onclick="toggleFirebaseAuthMode()" class="text-xs font-semibold text-blue-700 hover:text-blue-900">¿Primera vez? Crear cuenta</button>
+                <button id="authPasswordReset" type="button" onclick="resetFirebasePassword()" class="text-xs text-slate-500 hover:text-slate-700">Olvidé mi contraseña</button>
+            </div>
+            <p class="text-center text-[11px] text-slate-400">Sus datos y archivos se guardan en su cuenta Firebase.</p>
+        </form>
+    </div>
+
+    <div id="confirmDialog" class="hidden fixed inset-0 z-[90] bg-slate-950/60 backdrop-blur-sm items-center justify-center p-4" role="presentation" onclick="handleConfirmDialogBackdrop(event)">
+        <section class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/10" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+            <div class="p-6 sm:p-7">
+                <div class="flex items-start gap-4">
+                    <div id="confirmDialogIcon" class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 9v4m0 4h.01M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0Z"></path></svg>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p id="confirmDialogEyebrow" class="text-[11px] font-bold uppercase tracking-wider text-rose-600">Confirmación necesaria</p>
+                        <h2 id="confirmDialogTitle" class="mt-1 text-lg font-bold text-slate-900">¿Desea continuar?</h2>
+                        <p id="confirmDialogMessage" class="mt-2 break-words text-sm leading-6 text-slate-600"></p>
+                    </div>
+                    <button type="button" onclick="closeConfirmDialog(false)" aria-label="Cerrar diálogo" class="-mt-1 -mr-1 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 6 12 12M18 6 6 18"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/80 px-6 py-4 sm:flex-row sm:justify-end sm:px-7">
+                <button id="confirmDialogCancel" type="button" onclick="closeConfirmDialog(false)" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300">
+                    Cancelar
+                </button>
+                <button id="confirmDialogAccept" type="button" onclick="closeConfirmDialog(true)" class="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2">
+                    Confirmar
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <aside id="desktopSidebar" class="hidden md:flex fixed inset-y-0 left-0 z-40 w-56 lg:w-64 flex-col bg-slate-950 text-white border-r border-slate-800 shadow-xl">
+        <div class="px-5 py-6 border-b border-slate-800">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-black text-lg">CC</div>
+                <div>
+                    <p class="font-bold tracking-tight">CrediControl</p>
+                    <p class="text-[11px] text-slate-400">Administración de créditos</p>
+                </div>
+            </div>
+        </div>
+        <nav aria-label="Navegación principal" class="flex-1 px-3 py-5 space-y-2">
+            <button onclick="switchTab('dashboard')" id="tabBtn-dashboard" aria-current="page" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition bg-blue-600 text-white shadow">
+                <span class="mr-2" aria-hidden="true">▦</span> Dashboard
+            </button>
+            <button onclick="switchTab('clients')" id="tabBtn-clients" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">
+                <span class="mr-2" aria-hidden="true">♙</span> Clientes
+            </button>
+            <button onclick="switchTab('loans')" id="tabBtn-loans" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">
+                <span class="mr-2" aria-hidden="true">₡</span> Préstamos
+            </button>
+        </nav>
+        <div class="p-3 border-t border-slate-800">
+            <button onclick="exportBackupJSON()" title="Guardar copia de seguridad" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold bg-emerald-700 hover:bg-emerald-600 text-white transition">
+                <span class="mr-2" aria-hidden="true">↓</span> Respaldar datos
+            </button>
+            <button onclick="logoutFirebaseAccount()" class="mt-2 w-full rounded-xl px-4 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white">
+                <span class="mr-2" aria-hidden="true">↪</span> Cerrar sesión
+            </button>
+        </div>
+    </aside>
+
+    <!-- BARRA NAVEGACIÓN INFERIOR PARA MÓVILES -->
+    <div id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md text-white border-t border-slate-800 z-40 px-3 py-2 flex justify-around items-center shadow-2xl">
+        <button onclick="switchTab('dashboard')" id="mobileNav-dashboard" class="flex flex-col items-center gap-1 text-blue-400 font-bold text-[11px] py-1 px-3 rounded-xl transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+            Dashboard
+        </button>
+        <button onclick="switchTab('clients')" id="mobileNav-clients" class="flex flex-col items-center gap-1 text-slate-400 font-medium text-[11px] py-1 px-3 rounded-xl transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            Clientes
+        </button>
+        <button onclick="switchTab('loans')" id="mobileNav-loans" class="flex flex-col items-center gap-1 text-slate-400 font-medium text-[11px] py-1 px-3 rounded-xl transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Préstamos
+        </button>
+        <button onclick="logoutFirebaseAccount()" class="flex flex-col items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:text-white" aria-label="Cerrar sesión">
+            <span class="text-lg" aria-hidden="true">↪</span>
+            Salir
+        </button>
+    </div>
+
+    <!-- CONTENEDOR PRINCIPAL -->
+    <div id="mainContainer" class="max-w-[1600px] mx-auto space-y-4 sm:space-y-6 md:ml-56 lg:ml-64">
+        
+        <!-- NOTIFICACIÓN TOAST -->
+        <div id="toastNotification" class="hidden fixed bottom-20 md:bottom-6 right-4 bg-slate-900/90 text-white border border-slate-700 px-4 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-2 transition-all duration-300">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <span id="toastMessage" class="text-xs font-semibold">Operación completada con éxito</span>
+        </div>
+
+        <!-- HEADER GENERAL -->
+        <div class="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white rounded-2xl p-4 sm:p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+            <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="bg-blue-500/20 text-blue-300 text-[10px] sm:text-xs font-semibold uppercase px-2.5 py-0.5 rounded-full border border-blue-500/30">Sistema Integral v3.7 (Optimized)</span>
+                    <span id="cloudStatusBadge" class="text-[10px] sm:text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span> Conectando Nube...
+                    </span>
+                </div>
+                <h1 class="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mt-1">Plataforma de Administración de Créditos</h1>
+                <p class="text-blue-200 text-xs sm:text-sm mt-0.5">Gestión de clientes, préstamos y amortización por rangos de fecha</p>
+            </div>
+
+        </div>
+
+        <!-- ==================== MÓDULO 1: DASHBOARD GENERAL ==================== -->
+        <div id="module-dashboard" class="space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total Cartera Prestada</span>
+                    <div class="text-2xl font-bold text-slate-900" id="dashTotalPortfolio">₡0.00</div>
+                    <span class="text-xs text-blue-600 font-semibold" id="dashActiveLoansCount">0 préstamos activos</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total Recaudado</span>
+                    <div class="text-2xl font-bold text-emerald-600" id="dashTotalCollected">₡0.00</div>
+                    <span class="text-xs text-slate-500">Abonos a capital e intereses</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Saldo Capital por Cobrar</span>
+                    <div class="text-2xl font-bold text-amber-600" id="dashTotalPendingCapital">₡0.00</div>
+                    <span class="text-xs text-slate-500">Capital insoluto activo</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Clientes Registrados</span>
+                    <div class="text-2xl font-bold text-blue-600" id="dashTotalClients">0</div>
+                    <span class="text-xs text-slate-500">Expedientes activos</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900">Resumen de Préstamos Activos</h2>
+                        <p class="text-xs text-slate-500">Avance y estado actual de cada operación de crédito</p>
+                    </div>
+                    <button onclick="openNewLoanModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow transition">
+                        + Registrar Nuevo Préstamo
+                    </button>
+                </div>
+                <div id="dashboardLoansGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </div>
+        </div>
+
+        <!-- ==================== MÓDULO 2: GESTIÓN DE CLIENTES ==================== -->
+        <div id="module-clients" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                        <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Directorio de Clientes</h2>
+                        <button onclick="openNewClientModal()" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-lg border border-blue-200 transition">
+                            + Crear Cliente
+                        </button>
+                    </div>
+                    <div id="clientListGroup" class="space-y-2 max-h-[550px] overflow-y-auto pr-1"></div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:col-span-2 space-y-6">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                        <div>
+                            <span class="text-xs font-semibold text-blue-600 uppercase">Expediente del Cliente</span>
+                            <h2 class="text-xl font-bold text-slate-900" id="clientFormTitle">Seleccione un Cliente</h2>
+                        </div>
+                        <button onclick="saveCurrentClientInfo()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow transition flex items-center gap-1.5">
+                            Guardar Expediente
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-600 uppercase mb-1">Nombre Completo</label>
+                            <input type="text" id="clientFormName" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-600 uppercase mb-1">Cédula / Identificación</label>
+                            <input type="text" id="clientFormId" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-600 uppercase mb-1">Teléfono</label>
+                            <input type="text" id="clientFormPhone" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-600 uppercase mb-1">Correo Electrónico</label>
+                            <input type="email" id="clientFormEmail" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block font-semibold text-slate-600 uppercase mb-1">Dirección Física</label>
+                            <input type="text" id="clientFormAddress" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="font-bold text-slate-700">Cédula de Identidad (Archivo)</span>
+                                <span id="idDocBadge" class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Sin Archivo</span>
+                            </div>
+                            <input type="file" id="idDocFile" accept="image/*,.pdf" onchange="handleFileUpload('idDocFile', 'idDocPreview', 'idDocBadge')" class="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700">
+                            <div id="idDocPreview" class="text-blue-600 font-medium"></div>
+                            <button id="idDocViewButton" type="button" onclick="viewClientDocument('idDoc')" class="hidden text-xs font-bold text-blue-700 underline">Ver archivo guardado</button>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="font-bold text-slate-700">Orden Patronal / Ingresos</span>
+                                <span id="patronalDocBadge" class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Sin Archivo</span>
+                            </div>
+                            <input type="file" id="patronalDocFile" accept="image/*,.pdf" onchange="handleFileUpload('patronalDocFile', 'patronalDocPreview', 'patronalDocBadge')" class="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700">
+                            <div id="patronalDocPreview" class="text-blue-600 font-medium"></div>
+                            <button id="patronalDocViewButton" type="button" onclick="viewClientDocument('patronalDoc')" class="hidden text-xs font-bold text-blue-700 underline">Ver archivo guardado</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== MÓDULO 3: PRÉSTAMOS & AMORTIZACIÓN ==================== -->
+        <div id="module-loans" class="hidden space-y-6">
+            <!-- SELECTOR DE CLIENTE Y PRÉSTAMO -->
+            <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] items-end gap-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div class="min-w-0">
+                        <label for="clientSelect" class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Cliente activo</label>
+                        <select id="clientSelect" onchange="switchClient()" class="w-full min-w-0 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 transition focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"></select>
+                    </div>
+                    <div class="min-w-0">
+                        <label for="loanSelect" class="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Préstamo activo</label>
+                        <select id="loanSelect" onchange="switchLoan()" class="w-full min-w-0 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 transition focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"></select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                    <button onclick="addNewLoanToClient()" class="flex min-h-11 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-center text-xs font-bold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+                        + Añadir Préstamo
+                    </button>
+                    <button id="deleteLoanButton" onclick="deleteCurrentLoan()" class="hidden flex min-h-11 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-center text-xs font-bold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-500/30">
+                        Eliminar crédito
+                    </button>
+                    <button onclick="generatePDF()" class="flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-slate-800 px-3 py-2.5 text-center text-xs font-bold text-white shadow-sm transition hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500/40">
+                        Generar Informe PDF
+                    </button>
+                    <button onclick="exportToCSV()" class="flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl bg-emerald-600 px-3 py-2.5 text-center text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
+                        Exportar CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- PARÁMETROS DEL PRÉSTAMO -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 uppercase">Parámetros Financieros del Préstamo</h3>
+                        <p id="loanEditHint" class="mt-1 text-xs text-slate-500">Seleccione “Editar crédito” para modificar y guardar los datos.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="editLoanButton" onclick="startEditingCurrentLoan()" class="hidden bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold px-4 py-2.5 rounded-xl border border-amber-200 transition">
+                            Editar crédito
+                        </button>
+                        <button id="saveLoanChangesButton" onclick="saveCurrentLoanData()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition">
+                            Guardar crédito
+                        </button>
+                        <button id="cancelLoanEditButton" onclick="cancelLoanEdit()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 transition">
+                            Descartar
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 text-xs">
+                    <div class="xl:col-span-2">
+                        <label class="block font-semibold text-slate-600 uppercase mb-1">Nombre del Préstamo</label>
+                        <input type="text" id="loanName" disabled oninput="previewLoanChanges()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-100">
+                    </div>
+                    <div class="xl:col-span-2">
+                        <label class="block font-semibold text-slate-600 uppercase mb-1">Deudor</label>
+                        <input type="text" id="debtorName" disabled oninput="previewLoanChanges()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 uppercase mb-1">Monto Original (₡)</label>
+                        <input type="number" id="loanAmount" disabled onchange="onAmountChange()" step="5000" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 uppercase mb-1">Tasa Interés Mensual (%)</label>
+                        <input type="number" id="monthlyInterestRate" disabled onchange="onRateChange()" step="0.001" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 uppercase mb-1">Interés Mensual (₡)</label>
+                        <input type="number" id="monthlyInterest" disabled step="100" onchange="onMonthlyInterestChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                    </div>
+                    <div>
+                        <label for="startDate" class="block font-semibold text-slate-600 uppercase mb-1">Fecha Inicio</label>
+                        <div class="flex w-full">
+                            <input type="text" id="startDate" disabled inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" oninput="formatDateField(this); previewLoanChanges()" onchange="previewLoanChanges()" class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                            <button id="startDateCalendarButton" type="button" onclick="openDatePicker('startDatePicker', 'startDate')" aria-label="Abrir calendario para fecha de inicio" class="relative rounded-r-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed">
+                                <span aria-hidden="true">▦</span>
+                                <input type="date" id="startDatePicker" lang="es-CR" tabindex="-1" aria-hidden="true" onchange="syncDateFromCalendar(this, 'startDate')" class="pointer-events-none absolute h-px w-px opacity-0">
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="endDate" class="block font-semibold text-slate-600 uppercase mb-1">Fecha Fin / Vencimiento</label>
+                        <div class="flex w-full">
+                            <input type="text" id="endDate" disabled inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" oninput="formatDateField(this); previewLoanChanges()" onchange="previewLoanChanges()" class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                            <button id="endDateCalendarButton" type="button" onclick="openDatePicker('endDatePicker', 'endDate')" aria-label="Abrir calendario para fecha de vencimiento" class="relative rounded-r-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed">
+                                <span aria-hidden="true">▦</span>
+                                <input type="date" id="endDatePicker" lang="es-CR" tabindex="-1" aria-hidden="true" onchange="syncDateFromCalendar(this, 'endDate')" class="pointer-events-none absolute h-px w-px opacity-0">
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-600 uppercase mb-1">Periodicidad de Pago</label>
+                        <select id="frequency" disabled onchange="previewLoanChanges()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-100">
+                            <option value="quincenal">Quincenal (cada 15 días)</option>
+                            <option value="mensual">Mensual</option>
+                            <option value="semanal">Semanal (cada 7 días)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="pt-4 flex flex-col gap-4 border-t border-slate-100 text-xs sm:flex-row sm:items-end sm:justify-between">
+                    <label for="asOfDate" class="block w-full text-xs font-semibold text-slate-600 sm:max-w-xs">Fecha de corte
+                        <div class="mt-1.5 flex w-full">
+                            <input type="text" id="asOfDate" disabled inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" oninput="formatDateField(this); previewLoanChanges()" onchange="previewLoanChanges()" class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-4 py-3 text-sm font-normal disabled:cursor-not-allowed disabled:bg-slate-100">
+                            <button id="asOfDateCalendarButton" type="button" onclick="openDatePicker('asOfDatePicker', 'asOfDate')" aria-label="Abrir calendario para fecha de corte" class="relative rounded-r-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed">
+                                <span aria-hidden="true">▦</span>
+                                <input type="date" id="asOfDatePicker" lang="es-CR" tabindex="-1" aria-hidden="true" onchange="syncDateFromCalendar(this, 'asOfDate')" class="pointer-events-none absolute h-px w-px opacity-0">
+                            </button>
+                        </div>
+                    </label>
+                    <div class="rounded-xl bg-blue-50 px-4 py-3 text-right">
+                        <span class="block text-[10px] font-bold uppercase tracking-wide text-blue-600">Cuota periódica estimada</span>
+                        <span id="calculatedInstallment" class="mt-1 block text-lg font-bold text-blue-800">₡0.00</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 border-t border-slate-100 pt-4">
+                    <div class="rounded-xl bg-slate-50 p-3">
+                        <span class="block text-[10px] font-semibold uppercase text-slate-500">Total capital</span>
+                        <strong id="loanTotalCapital" class="mt-1 block text-sm text-slate-900">₡0,00</strong>
+                    </div>
+                    <div class="rounded-xl bg-amber-50 p-3">
+                        <span class="block text-[10px] font-semibold uppercase text-amber-700">Intereses totales</span>
+                        <strong id="loanTotalInterest" class="mt-1 block text-sm text-amber-800">₡0,00</strong>
+                    </div>
+                    <div class="rounded-xl bg-blue-50 p-3">
+                        <span class="block text-[10px] font-semibold uppercase text-blue-700">Total a pagar</span>
+                        <strong id="loanTotalRepayment" class="mt-1 block text-sm text-blue-800">₡0,00</strong>
+                    </div>
+                    <div class="rounded-xl bg-slate-50 p-3">
+                        <span class="block text-[10px] font-semibold uppercase text-slate-500">Capital por cuota</span>
+                        <strong id="loanCapitalPerInstallment" class="mt-1 block text-sm text-slate-900">₡0,00</strong>
+                    </div>
+                    <div class="rounded-xl bg-amber-50 p-3">
+                        <span class="block text-[10px] font-semibold uppercase text-amber-700">Interés por cuota</span>
+                        <strong id="loanInterestPerInstallment" class="mt-1 block text-sm text-amber-800">₡0,00</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TARJETAS DE PROGRESO -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Monto del Préstamo</span>
+                    <div class="text-xl font-bold text-slate-900" id="cardLoanAmount">₡0.00</div>
+                    <span class="text-xs text-slate-500" id="cardLoanSub">0 cuotas</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total Recaudado</span>
+                    <div class="text-xl font-bold text-emerald-600" id="cardTotalPaid">₡0.00</div>
+                    <span class="text-xs text-slate-500" id="cardPaidCount">0 cuotas abonadas</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Capital Pendiente</span>
+                    <div class="text-xl font-bold text-amber-600" id="cardCapitalRemaining">₡0.00</div>
+                    <span class="text-xs text-slate-500" id="cardCapitalPaidSub">₡0.00 pagado</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total para Cancelación</span>
+                    <div class="text-xl font-bold text-blue-600" id="cardTotalRemaining">₡0.00</div>
+                    <span class="text-xs text-slate-500">Saldo insoluto + intereses</span>
+                </div>
+            </div>
+
+            <!-- BARRA DE PROGRESO -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                <div class="flex justify-between items-center text-xs font-bold">
+                    <span class="text-slate-700" id="progressLeftText">0 de 0 cuotas abonadas</span>
+                    <span class="text-blue-600 text-sm" id="progressPercent">0%</span>
+                    <span class="text-slate-500" id="progressRightText">Faltan 0 cuotas</span>
+                </div>
+                <div class="w-full bg-slate-200 h-3 rounded-full overflow-hidden">
+                    <div id="progressBarFill" class="bg-emerald-600 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- TABLA DE AMORTIZACIÓN (ESCRITORIO) Y CARDS (MÓVIL) -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-4 sm:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="text-sm font-bold text-slate-900 uppercase">Tabla de Amortización & Control de Pagos</h3>
+                    <span class="text-xs text-slate-500">Marque las casillas para actualizar cobros</span>
+                </div>
+
+                <!-- Versión Móvil de Cards -->
+                <div id="scheduleMobileCards" class="md:hidden p-3 space-y-3"></div>
+
+                <!-- Versión Tabla Desktop -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="bg-slate-100/80 text-slate-700 text-xs font-bold border-b border-slate-200">
+                                <th class="py-3 px-4 text-center whitespace-nowrap">Pagado</th>
+                                <th class="py-3 px-4 whitespace-nowrap">ID préstamo</th>
+                                <th class="py-3 px-4 text-center whitespace-nowrap">No. cuota</th>
+                                <th class="py-3 px-4 whitespace-nowrap">Fecha</th>
+                                <th class="py-3 px-4 text-right whitespace-nowrap">Cuota</th>
+                                <th class="py-3 px-4 text-right whitespace-nowrap">Capital</th>
+                                <th class="py-3 px-4 text-right whitespace-nowrap">Interés</th>
+                                <th class="py-3 px-4 text-center whitespace-nowrap">Referencia / Comprobante</th>
+                                <th class="py-3 px-4 text-right pr-6 whitespace-nowrap">Saldo Insoluto</th>
+                                <th class="py-3 px-4 text-center no-print whitespace-nowrap">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scheduleBody" class="divide-y divide-slate-100 font-sans text-sm tabular-nums"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL NUEVO CLIENTE -->
+    <div id="newClientModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Crear Nuevo Cliente</h3>
+                <button onclick="closeNewClientModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombre del Cliente *</label>
+                <input type="text" id="modalNewClientName" placeholder="Ej: María Rodríguez" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Cédula / Identificación</label>
+                <input type="text" id="modalNewClientId" placeholder="Ej: 1-0982-0112" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeNewClientModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancelar</button>
+                <button onclick="saveNewClientFromModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow">Crear Cliente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVO PRÉSTAMO -->
+    <div id="newLoanModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl p-6 sm:p-8 space-y-5">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Registrar Nuevo Préstamo</h3>
+                <button onclick="closeNewLoanModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombre / Identificador del Préstamo *</label>
+                <input type="text" id="modalNewLoanName" placeholder="Ej: Prestamo-Empredimiento" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Monto Inicial (₡)</label>
+                <input type="number" id="modalNewLoanAmount" value="100000" min="0.01" step="5000" oninput="previewNewLoan()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tasa de Interés Mensual (%)</label>
+                    <input type="number" id="modalNewLoanRate" value="3.445" min="0" step="0.001" oninput="previewNewLoan()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Interés Mensual (₡)</label>
+                    <input type="number" id="modalNewLoanInterest" readonly class="w-full bg-slate-100 border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-600">
+                </div>
+                <div>
+                    <label for="modalNewLoanStartDate" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha de Inicio</label>
+                    <div class="flex min-w-0 w-full">
+                        <input type="text" id="modalNewLoanStartDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" oninput="formatDateField(this); previewNewLoan()" required class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="openDatePicker('modalNewLoanStartDatePicker', 'modalNewLoanStartDate')" aria-label="Abrir calendario para fecha de inicio" class="relative rounded-r-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span aria-hidden="true">▦</span>
+                            <input type="date" id="modalNewLoanStartDatePicker" lang="es-CR" tabindex="-1" aria-hidden="true" onchange="syncDateFromCalendar(this, 'modalNewLoanStartDate'); previewNewLoan()" class="pointer-events-none absolute h-px w-px opacity-0">
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="modalNewLoanEndDate" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha de Vencimiento</label>
+                    <div class="flex min-w-0 w-full">
+                        <input type="text" id="modalNewLoanEndDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" oninput="formatDateField(this); previewNewLoan()" required class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="openDatePicker('modalNewLoanEndDatePicker', 'modalNewLoanEndDate')" aria-label="Abrir calendario para fecha de vencimiento" class="relative rounded-r-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span aria-hidden="true">▦</span>
+                            <input type="date" id="modalNewLoanEndDatePicker" lang="es-CR" tabindex="-1" aria-hidden="true" onchange="syncDateFromCalendar(this, 'modalNewLoanEndDate'); previewNewLoan()" class="pointer-events-none absolute h-px w-px opacity-0">
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Periodicidad de Pago</label>
+                    <select id="modalNewLoanFrequency" onchange="previewNewLoan()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500">
+                        <option value="quincenal">Quincenal (cada 15 días)</option>
+                        <option value="semanal">Semanal (cada 7 días)</option>
+                        <option value="mensual">Mensual</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="modalNewLoanAsOfDate" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha de Corte</label>
+                    <div class="flex min-w-0 w-full">
+                        <input type="text" id="modalNewLoanAsOfDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" oninput="formatDateField(this); previewNewLoan()" required class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="openDatePicker('modalNewLoanAsOfDatePicker', 'modalNewLoanAsOfDate')" aria-label="Abrir calendario para fecha de corte" class="relative rounded-r-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <span aria-hidden="true">▦</span>
+                            <input type="date" id="modalNewLoanAsOfDatePicker" lang="es-CR" tabindex="-1" aria-hidden="true" onchange="syncDateFromCalendar(this, 'modalNewLoanAsOfDate'); previewNewLoan()" class="pointer-events-none absolute h-px w-px opacity-0">
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                <p class="text-[11px] font-bold uppercase tracking-wide text-blue-700">Resumen del plan de pagos</p>
+                <div class="mt-2 flex flex-wrap items-baseline justify-between gap-2">
+                    <span id="modalNewLoanInstallmentCount" class="text-xs font-medium text-slate-600">0 cuotas programadas</span>
+                    <span id="modalNewLoanInstallmentAmount" class="text-base font-bold text-blue-700">Cuota: ₡0,00</span>
+                </div>
+                <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-blue-100 pt-3">
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase text-slate-500">Capital total</span>
+                        <strong id="modalNewLoanTotalCapital" class="text-xs text-slate-700">₡0,00</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase text-slate-500">Intereses totales</span>
+                        <strong id="modalNewLoanTotalInterest" class="text-xs text-amber-700">₡0,00</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase text-slate-500">Total a pagar</span>
+                        <strong id="modalNewLoanTotalRepayment" class="text-xs text-blue-800">₡0,00</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase text-slate-500">Capital por cuota</span>
+                        <strong id="modalNewLoanCapitalPerInstallment" class="text-xs text-slate-700">₡0,00</strong>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold uppercase text-slate-500">Interés por cuota</span>
+                        <strong id="modalNewLoanInterestPerInstallment" class="text-xs text-amber-700">₡0,00</strong>
+                    </div>
+                </div>
+                <p class="mt-1 text-[11px] text-slate-500">La primera cuota vence después de transcurrida la periodicidad desde la fecha de inicio. El monto y la cantidad se actualizan automáticamente.</p>
+            </div>
+            <div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button onclick="closeNewLoanModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancelar</button>
+                <button onclick="saveNewLoanFromModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow">Crear Préstamo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL REGISTRO DE PAGO -->
+    <div id="paymentModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 overflow-y-auto p-4 flex justify-center items-center">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900" id="paymentModalTitle">Registrar Comprobante de Pago</h3>
+                <button onclick="closePaymentModal()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            </div>
+            <input type="hidden" id="modalCuotaIndex">
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Monto Pagado (₡)</label>
+                <input type="number" id="modalPaidAmount" step="100" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-emerald-700">
+            </div>
+            <div>
+                <label for="modalPaymentDate" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha Real de Pago</label>
+                <div class="flex w-full">
+                    <input type="text" id="modalPaymentDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" oninput="formatDateField(this)" class="min-w-0 flex-1 rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-4 py-3 text-sm">
+                    <button type="button" onclick="openDatePicker('modalPaymentDatePicker', 'modalPaymentDate')" aria-label="Abrir calendario para fecha de pago" class="relative rounded-r-xl border border-slate-300 bg-white px-3 text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <span aria-hidden="true">▦</span>
+                        <input type="date" id="modalPaymentDatePicker" lang="es-CR" tabindex="-1" aria-hidden="true" onchange="syncDateFromCalendar(this, 'modalPaymentDate')" class="pointer-events-none absolute h-px w-px opacity-0">
+                    </button>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1"># Referencia / N° Transacción</label>
+                <input type="text" id="modalRefNumber" placeholder="Ej: SINPE-99882100" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Comprobante (Imagen o PDF)</label>
+                <input type="file" id="modalProofFile" onchange="handleProofUpload()" accept="image/*,.pdf" class="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700">
+                <div id="modalProofPreview" class="text-xs text-blue-600 font-medium pt-1"></div>
+                <button id="modalViewProofButton" type="button" onclick="viewPaymentProof()" class="hidden mt-2 text-xs font-bold text-blue-700 hover:text-blue-900 underline underline-offset-2">Visualizar comprobante</button>
+                <button id="modalRemoveProofButton" type="button" onclick="removePaymentProofFromPaymentModal()" class="hidden mt-2 ml-3 text-xs font-bold text-rose-700 hover:text-rose-900 underline underline-offset-2">Quitar comprobante</button>
+                <p class="mt-1 text-[11px] text-slate-400">Se guarda en su cuenta Firebase. Máximo 10 MB por archivo.</p>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closePaymentModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancelar</button>
+                <button onclick="savePaymentDetails()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow">Guardar Pago</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="proofViewerModal" class="hidden fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="proofViewerTitle">
+        <section class="w-full max-w-5xl h-[90vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+            <header class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6">
+                <div class="min-w-0">
+                    <h2 id="proofViewerTitle" class="text-sm font-bold text-slate-900">Comprobante de pago</h2>
+                    <p id="proofViewerFileName" class="truncate text-xs text-slate-500"></p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                    <a id="proofViewerDownload" class="rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100" download>Descargar</a>
+                    <button type="button" onclick="closeProofViewer()" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Cerrar comprobante">✕</button>
+                </div>
+            </header>
+            <div class="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4 flex items-center justify-center">
+                <img id="proofViewerImage" class="hidden max-h-full max-w-full rounded-lg object-contain shadow" alt="Vista previa del comprobante">
+                <iframe id="proofViewerPdf" class="hidden h-full w-full rounded-lg bg-white" title="Comprobante PDF"></iframe>
+            </div>
+        </section>
+    </div>
+
+    <!-- VISTA INFORME PDF -->
+    <div id="pdfModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 overflow-y-auto p-4 flex justify-center items-start">
+        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-6">
+            <div class="bg-slate-800 text-white p-4 no-print flex justify-between items-center">
+                <span class="font-semibold text-sm">Vista Previa de Informe PDF</span>
+                <div class="flex gap-2">
+                    <button onclick="downloadPDFDirect()" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow">
+                        Descargar PDF Directo
+                    </button>
+                    <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-lg text-xs font-medium transition">Imprimir Navegador</button>
+                    <button onclick="closePDFModal()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-xs transition">Cerrar</button>
+                </div>
+            </div>
+
+            <div id="pdfContent" class="space-y-6 bg-white p-6 text-slate-800 sm:p-8">
+                <div class="flex justify-between items-start border-b border-slate-300 pb-5">
+                    <div>
+                        <h1 class="text-2xl font-bold text-slate-900 uppercase tracking-wide">ESTADO DE CUENTA DE CRÉDITO</h1>
+                        <p class="mt-1 text-sm text-slate-600" id="pdfLoanTitleHeader">Préstamo: --</p>
+                    </div>
+                    <div class="text-right text-sm">
+                        <p class="font-bold text-slate-900" id="pdfDate">Fecha: --/--/----</p>
+                        <p class="text-slate-500">Ref: REC-2026-OCT</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <div>
+                        <p class="font-semibold uppercase text-slate-500">Deudor / Cliente:</p>
+                        <p class="mt-0.5 text-base font-bold text-slate-900" id="pdfDebtor">--</p>
+                        <p class="text-xs text-slate-600" id="pdfDebtorId">Cédula: --</p>
+                        <p class="text-xs text-slate-600" id="pdfDebtorPhone">Tel: --</p>
+                        <p class="text-slate-500 mt-2">Monto Préstamo: <span id="pdfLoanAmount" class="font-semibold text-slate-800">CRC 0.00</span></p>
+                        <p class="text-slate-500">Tasa Interés Mensual: <span id="pdfRate" class="font-semibold text-slate-800">0%</span> (<span id="pdfInterest">CRC 0.00</span>)</p>
+                    </div>
+                    <div>
+                        <p class="font-semibold uppercase text-slate-500">Plan de Pagos:</p>
+                        <p class="mt-0.5 font-bold text-slate-900" id="pdfPeriod">--</p>
+                        <p class="text-slate-500 mt-2">Cuota Periódica: <span id="pdfInstallment" class="font-semibold text-slate-800">CRC 0.00</span></p>
+                        <p class="text-slate-500">Evaluado al Corte: <span id="pdfAsOf" class="font-semibold text-slate-800">--/--/----</span></p>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="pdf-section-title text-sm font-bold uppercase text-slate-900">Resumen de Saldos al Corte</h3>
+                    <table class="pdf-summary-table w-full border border-slate-300 text-left text-sm">
+                        <tbody class="divide-y divide-slate-200">
+                            <tr class="bg-slate-50">
+                                <td class="p-2.5 font-medium text-slate-700">Total Abonos Recibidos a la Fecha</td>
+                                <td class="p-2.5 text-right font-bold text-emerald-700" id="pdfTotalPaid">CRC 0.00</td>
+                            </tr>
+                            <tr>
+                                <td class="p-2.5 font-medium text-slate-700">Capital Amortizado Pagado</td>
+                                <td class="p-2.5 text-right font-semibold text-slate-800" id="pdfCapitalPaid">CRC 0.00</td>
+                            </tr>
+                            <tr class="bg-slate-50">
+                                <td class="p-2.5 font-medium text-slate-700">Intereses Pagados a la Fecha</td>
+                                <td class="p-2.5 text-right font-semibold text-slate-800" id="pdfInterestPaid">CRC 0.00</td>
+                            </tr>
+                            <tr>
+                                <td class="p-2.5 font-bold text-slate-900">Saldo Capital Insoluto Pendiente</td>
+                                <td class="p-2.5 text-right text-base font-bold text-amber-700" id="pdfCapitalRemaining">CRC 0.00</td>
+                            </tr>
+                            <tr class="bg-blue-50/50">
+                                <td class="p-2.5 font-bold text-blue-900">Total Neto Requerido para Cancelación Total</td>
+                                <td class="p-2.5 text-right text-base font-bold text-blue-800" id="pdfTotalRemaining">CRC 0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h3 class="pdf-section-title text-sm font-bold uppercase text-slate-900">Detalle de Transacciones de Cobro</h3>
+                    <table class="pdf-details-table w-full border border-slate-300 text-left text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
+                                <th class="p-2 text-center">#</th>
+                                <th class="p-2">Fecha</th>
+                                <th class="p-2 text-right">Cuota</th>
+                                <th class="p-2 text-right">Capital</th>
+                                <th class="p-2 text-right">Interés</th>
+                                <th class="p-2 text-center">Estado</th>
+                                <th class="p-2 text-right">Saldo Insoluto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdfTableBody" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+
+                <div class="pt-12 grid grid-cols-2 gap-12 text-center text-xs">
+                    <div>
+                        <div class="border-t border-slate-400 pt-2 font-medium text-slate-700">Acreedor / Representante</div>
+                    </div>
+                    <div>
+                        <div class="border-t border-slate-400 pt-2 font-medium text-slate-700">Deudor (Firma Conformidad)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIREBASE MODULES INTEGRATION -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getBlob, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAbZHWpDR8I04tRbTzKeRrI0hmdscuuDQI",
+            authDomain: "micarteradeprestamos.firebaseapp.com",
+            projectId: "micarteradeprestamos",
+            storageBucket: "micarteradeprestamos.firebasestorage.app",
+            messagingSenderId: "437246406832",
+            appId: "1:437246406832:web:d0005123ada6052166cb75",
+            measurementId: "G-82BHVYFPCV"
+        };
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'micarteradeprestamos';
+        
+        let db = null;
+        let auth = null;
+        let storage = null;
+        let clientsUnsubscribe = null;
+        const clientSaveQueues = new Map();
+        const readyUserIds = new Set();
+        const authReadyWaiters = new Map();
+        const userLoadErrors = new Map();
+        let authStateVersion = 0;
+        let activeAuthUid = null;
+        window.clientsData = [];
+        window.appId = appId;
+
+        function loadLocalData() {
+            const saved = localStorage.getItem('cartera_prestamos_clients');
+            if (saved) {
+                try {
+                    window.clientsData = JSON.parse(saved);
+                } catch(e) {
+                    window.clientsData = getDefaultClientsData();
+                }
+            } else {
+                window.clientsData = getDefaultClientsData();
+            }
+        }
+
+        function setCloudStatus(message, isError = false) {
+            const badge = document.getElementById('cloudStatusBadge');
+            if (!badge) return;
+            badge.innerHTML = `<span class="w-2 h-2 ${isError ? 'bg-rose-400' : 'bg-emerald-400'} rounded-full"></span> ${message}`;
+        }
+
+        function getUserClientsCollection(user) {
+            return collection(db, 'artifacts', appId, 'users', user.uid, 'clients');
+        }
+
+        async function migrateLegacyPaymentProofs(client, user) {
+            for (const loan of client.loans || []) {
+                for (const payment of Object.values(loan.paymentsInfo || {})) {
+                    if (!payment.proofStorageKey || payment.proofStoragePath || !window.loadLegacyPaymentProof) continue;
+                    const legacyProof = await window.loadLegacyPaymentProof(payment.proofStorageKey);
+                    if (!legacyProof?.file) continue;
+                    const proofPath = `artifacts/${appId}/users/${user.uid}/clients/${client.id}/loans/${loan.id}/payments/${Date.now()}_legacy-proof`;
+                    await window.uploadFileToFirebase(proofPath, legacyProof.file);
+                    payment.proofStoragePath = proofPath;
+                    delete payment.proofStorageKey;
+                }
+            }
+        }
+
+        async function loadUserClients(user, stateVersion) {
+            if (clientsUnsubscribe) {
+                clientsUnsubscribe();
+                clientsUnsubscribe = null;
+            }
+            window.currentClientId = null;
+            window.currentLoanId = null;
+            const userClients = getUserClientsCollection(user);
+            const cloudSnapshot = await getDocs(userClients);
+            if (stateVersion !== authStateVersion) return false;
+
+            if (cloudSnapshot.empty) {
+                const cachedOwnerId = localStorage.getItem('cartera_prestamos_owner_uid');
+                const localClients = cachedOwnerId && cachedOwnerId !== user.uid
+                    ? getDefaultClientsData()
+                    : window.clientsData;
+                for (const client of localClients) {
+                    if (stateVersion !== authStateVersion) return false;
+                    await migrateLegacyPaymentProofs(client, user);
+                    if (stateVersion !== authStateVersion) return false;
+                    await setDoc(doc(userClients, client.id), client);
+                }
+                if (stateVersion !== authStateVersion) return false;
+                window.clientsData = localClients;
+                localStorage.setItem('cartera_prestamos_clients', JSON.stringify(localClients));
+            } else {
+                window.clientsData = cloudSnapshot.docs.map(clientDoc => ({ id: clientDoc.id, ...clientDoc.data() }));
+                localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+            }
+            if (stateVersion !== authStateVersion) return false;
+            localStorage.setItem('cartera_prestamos_owner_uid', user.uid);
+
+            clientsUnsubscribe = onSnapshot(userClients, snapshot => {
+                if (stateVersion !== authStateVersion) return;
+                window.clientsData = snapshot.docs.map(clientDoc => ({ id: clientDoc.id, ...clientDoc.data() }));
+                localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+                localStorage.setItem('cartera_prestamos_owner_uid', user.uid);
+                if (window.initApp) window.initApp();
+            }, error => {
+                console.error('Firestore listener error:', error);
+                setCloudStatus('Error de sincronización', true);
+                if (window.showToast) window.showToast(`No se pudo sincronizar desde Firebase: ${error.message}`);
+            });
+            return true;
+        }
+
+        window.waitForFirebaseUserData = function(userId) {
+            if (readyUserIds.has(userId)) return Promise.resolve();
+            if (userLoadErrors.has(userId)) return Promise.reject(userLoadErrors.get(userId));
+            return new Promise((resolve, reject) => authReadyWaiters.set(userId, { resolve, reject }));
+        };
+
+        window.firebaseAuthAction = async function({ email, password, createAccount }) {
+            if (!auth) throw new Error('Firebase Authentication no está disponible.');
+            const credentials = createAccount
+                ? await createUserWithEmailAndPassword(auth, email, password)
+                : await signInWithEmailAndPassword(auth, email, password);
+            await window.waitForFirebaseUserData(credentials.user.uid);
+            return credentials.user;
+        };
+
+        window.firebasePasswordReset = async function(email) {
+            if (!auth) throw new Error('Firebase Authentication no está disponible.');
+            await sendPasswordResetEmail(auth, email);
+        };
+
+        window.firebaseSignOut = async function() {
+            if (auth) await signOut(auth);
+        };
+
+        window.saveClientToCloud = async function(clientObj) {
+            const user = auth?.currentUser;
+            if (!db || !user || user.isAnonymous) throw new Error('Inicie sesión con su cuenta para sincronizar los datos.');
+            if (!clientObj?.id) throw new Error('No se puede sincronizar un cliente sin identificador.');
+            const saveKey = `${user.uid}:${clientObj.id}`;
+            const previousSave = clientSaveQueues.get(saveKey) || Promise.resolve();
+            const currentSave = previousSave.catch(() => {}).then(() =>
+                setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'clients', clientObj.id), clientObj)
+            );
+            clientSaveQueues.set(saveKey, currentSave);
+            try {
+                await currentSave;
+            } finally {
+                if (clientSaveQueues.get(saveKey) === currentSave) clientSaveQueues.delete(saveKey);
+            }
+        };
+
+        window.firebaseClientStoragePath = function(clientId, relativePath) {
+            const user = auth?.currentUser;
+            if (!user || user.isAnonymous) throw new Error('Inicie sesión para guardar archivos en Firebase.');
+            return `artifacts/${appId}/users/${user.uid}/clients/${clientId}/${relativePath}`;
+        };
+
+        window.uploadFileToFirebase = async function(path, file) {
+            const user = auth?.currentUser;
+            if (!user || user.isAnonymous || !storage) throw new Error('Inicie sesión para guardar archivos en Firebase.');
+            if (!(file instanceof File) || file.size === 0 || file.size > 10 * 1024 * 1024) {
+                throw new Error('El archivo está vacío o supera el límite de 10 MB.');
+            }
+            if (!(file.type.startsWith('image/') || file.type === 'application/pdf')) {
+                throw new Error('Solo se permiten imágenes y documentos PDF.');
+            }
+            const userPrefix = `artifacts/${appId}/users/${user.uid}/clients/`;
+            if (!path.startsWith(userPrefix)) throw new Error('La ruta del archivo no pertenece a la cuenta actual.');
+            const result = await uploadBytes(ref(storage, path), file, {
+                contentType: file.type,
+                customMetadata: { originalName: file.name }
+            });
+            return result.ref.fullPath;
+        };
+
+        window.loadFileFromFirebase = async function(path) {
+            const user = auth?.currentUser;
+            if (!user || user.isAnonymous || !storage) throw new Error('Inicie sesión para ver los archivos de Firebase.');
+            const userPrefix = `artifacts/${appId}/users/${user.uid}/clients/`;
+            if (!path?.startsWith(userPrefix)) throw new Error('La ruta del archivo no pertenece a la cuenta actual.');
+            return getBlob(ref(storage, path));
+        };
+
+        window.deleteFileFromFirebase = async function(path) {
+            const user = auth?.currentUser;
+            if (!user || user.isAnonymous || !storage) throw new Error('Inicie sesión para eliminar archivos de Firebase.');
+            const userPrefix = `artifacts/${appId}/users/${user.uid}/clients/`;
+            if (!path?.startsWith(userPrefix)) throw new Error('La ruta del archivo no pertenece a la cuenta actual.');
+            await deleteObject(ref(storage, path));
+        };
+
+        function getDefaultClientsData() {
+            return [
+                {
+                    id: 'c1',
+                    name: 'Cliente de ejemplo',
+                    idNumber: '000-0000',
+                    phone: '0000-0000',
+                    email: 'cliente.ejemplo@example.com',
+                    address: 'Dirección de ejemplo',
+                    idDocName: '',
+                    patronalDocName: '',
+                    activeLoanId: 'l1',
+                    loans: [
+                        {
+                            id: 'l1',
+                            loanName: 'Préstamo de ejemplo',
+                            debtorName: 'Cliente de ejemplo',
+                            loanAmount: 100000,
+                            monthlyInterestRate: 3.445,
+                            monthlyInterest: 3445,
+                            startDate: '2026-01-16',
+                            endDate: '2027-01-16',
+                            frequency: 'quincenal',
+                            asOfDate: '2026-10-16',
+                            customPaidState: {},
+                            paymentsInfo: {}
+                        }
+                    ]
+                }
+            ];
+        }
+
+        loadLocalData();
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = initializeAuth(app, {
+                persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+            });
+            db = getFirestore(app);
+            storage = getStorage(app);
+            window.db = db;
+
+            onAuthStateChanged(auth, async user => {
+                const stateVersion = ++authStateVersion;
+                if (!user) {
+                    const signedOutUid = activeAuthUid;
+                    activeAuthUid = null;
+                    if (clientsUnsubscribe) {
+                        clientsUnsubscribe();
+                        clientsUnsubscribe = null;
+                    }
+                    if (signedOutUid) {
+                        readyUserIds.delete(signedOutUid);
+                        window.clientsData = [];
+                        window.currentClientId = null;
+                        window.currentLoanId = null;
+                    }
+                    for (const [userId, waiter] of authReadyWaiters) {
+                        waiter.reject(new Error('La sesión se cerró antes de completar la sincronización.'));
+                        authReadyWaiters.delete(userId);
+                    }
+                    window.firebaseUser = null;
+                    setCloudStatus('Inicie sesión', true);
+                    document.getElementById('startupLockScreen').classList.remove('hidden');
+                    return;
+                }
+                if (user.isAnonymous) {
+                    window.firebaseUser = null;
+                    try {
+                        await signOut(auth);
+                    } catch (error) {
+                        console.error('Could not sign out the legacy anonymous account:', error);
+                    }
+                    return;
+                }
+                activeAuthUid = user.uid;
+                readyUserIds.delete(user.uid);
+                userLoadErrors.delete(user.uid);
+                window.firebaseUser = user;
+                setCloudStatus('Sincronizando…');
+                try {
+                    const loaded = await loadUserClients(user, stateVersion);
+                    if (!loaded || stateVersion !== authStateVersion || auth.currentUser?.uid !== user.uid) return;
+                    readyUserIds.add(user.uid);
+                    userLoadErrors.delete(user.uid);
+                    authReadyWaiters.get(user.uid)?.resolve();
+                    authReadyWaiters.delete(user.uid);
+                    setCloudStatus('Nube conectada');
+                    document.getElementById('startupLockScreen').classList.add('hidden');
+                    if (window.initApp) window.initApp();
+                } catch (error) {
+                    if (stateVersion !== authStateVersion || auth.currentUser?.uid !== user.uid) return;
+                    console.error('Firebase initialization error:', error);
+                    setCloudStatus('Error de sincronización', true);
+                    userLoadErrors.set(user.uid, error);
+                    authReadyWaiters.get(user.uid)?.reject(error);
+                    authReadyWaiters.delete(user.uid);
+                    const authError = document.getElementById('lockScreenError');
+                    authError.textContent = `No se pudieron cargar los datos de Firebase: ${error.message}`;
+                    authError.classList.remove('hidden');
+                }
+            });
+        } catch(error) {
+            console.error('Firebase initialization error:', error);
+            setCloudStatus('Firebase no disponible', true);
+            const authError = document.getElementById('lockScreenError');
+            authError.textContent = `Firebase no está disponible: ${error.message}`;
+            authError.classList.remove('hidden');
+        }
+    </script>
+
+    <!-- LÓGICA PRINCIPAL DEL SISTEMA -->
+    <script>
+        window.currentClientId = null;
+        window.currentLoanId = null;
+        let calculatedRows = [];
+        let isEditingLoan = false;
+        let confirmDialogResolver = null;
+        let confirmDialogPreviousFocus = null;
+        let proofViewerObjectUrl = null;
+
+        const PAYMENT_PROOF_DB_NAME = 'cartera_prestamos_payment_proofs';
+        const PAYMENT_PROOF_STORE_NAME = 'proofs';
+
+        let firebaseAuthMode = 'signin';
+
+        function showLockError(message) {
+            const error = document.getElementById('lockScreenError');
+            error.textContent = message;
+            error.classList.remove('hidden');
+        }
+
+        function toggleFirebaseAuthMode() {
+            firebaseAuthMode = firebaseAuthMode === 'signin' ? 'signup' : 'signin';
+            const isSignup = firebaseAuthMode === 'signup';
+            document.getElementById('lockScreenTitle').textContent = isSignup ? 'Crear cuenta' : 'Acceder a CrediControl';
+            document.getElementById('lockScreenDescription').textContent = isSignup
+                ? 'Cree una cuenta para guardar y sincronizar sus datos.'
+                : 'Inicie sesión para sincronizar sus datos y documentos.';
+            document.getElementById('lockScreenSubmit').textContent = isSignup ? 'Crear cuenta' : 'Iniciar sesión';
+            document.getElementById('authPassword').autocomplete = isSignup ? 'new-password' : 'current-password';
+            document.getElementById('authModeToggle').textContent = isSignup
+                ? '¿Ya tiene cuenta? Iniciar sesión'
+                : '¿Primera vez? Crear cuenta';
+            document.getElementById('authPasswordReset').classList.toggle('hidden', isSignup);
+            document.getElementById('lockScreenError').classList.add('hidden');
+        }
+
+        function getFirebaseAuthErrorMessage(error) {
+            const messages = {
+                'auth/email-already-in-use': 'Ya existe una cuenta con ese correo. Inicie sesión.',
+                'auth/invalid-email': 'Ingrese un correo electrónico válido.',
+                'auth/invalid-credential': 'El correo o la contraseña no son correctos.',
+                'auth/user-disabled': 'Esta cuenta está deshabilitada.',
+                'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+                'auth/operation-not-allowed': 'Active el proveedor Correo/Contraseña en Firebase Authentication.',
+                'auth/network-request-failed': 'No se pudo conectar. Verifique su conexión a internet.',
+                'permission-denied': 'Firebase denegó el acceso. Revise las reglas de Firestore y Storage.'
+            };
+            return messages[error.code] || error.message || 'No se pudo completar el acceso a Firebase.';
+        }
+
+        async function submitFirebaseAuth() {
+            const error = document.getElementById('lockScreenError');
+            error.classList.add('hidden');
+            const email = document.getElementById('authEmail').value.trim();
+            const password = document.getElementById('authPassword').value;
+            if (!email || !password) {
+                showLockError('Ingrese el correo y la contraseña.');
+                return;
+            }
+            const submitButton = document.getElementById('lockScreenSubmit');
+            submitButton.disabled = true;
+            submitButton.textContent = firebaseAuthMode === 'signup' ? 'Creando cuenta…' : 'Iniciando sesión…';
+            try {
+                if (!window.firebaseAuthAction) throw new Error('Firebase aún se está inicializando. Intente de nuevo.');
+                await window.firebaseAuthAction({ email, password, createAccount: firebaseAuthMode === 'signup' });
+            } catch (error) {
+                console.error('Firebase authentication error:', error);
+                showLockError(getFirebaseAuthErrorMessage(error));
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = firebaseAuthMode === 'signup' ? 'Crear cuenta' : 'Iniciar sesión';
+            }
+        }
+
+        async function resetFirebasePassword() {
+            const email = document.getElementById('authEmail').value.trim();
+            if (!email) {
+                showLockError('Ingrese su correo para enviar el enlace de recuperación.');
+                document.getElementById('authEmail').focus();
+                return;
+            }
+            try {
+                if (!window.firebasePasswordReset) throw new Error('Firebase aún se está inicializando. Intente de nuevo.');
+                await window.firebasePasswordReset(email);
+                showLockError('Se envió un enlace de recuperación a su correo.');
+            } catch (error) {
+                showLockError(getFirebaseAuthErrorMessage(error));
+            }
+        }
+
+        async function logoutFirebaseAccount() {
+            try {
+                if (!window.firebaseSignOut) throw new Error('Firebase todavía se está inicializando.');
+                await window.firebaseSignOut();
+            } catch (error) {
+                console.error('Firebase sign-out error:', error);
+                showToast(`No se pudo cerrar la sesión: ${error.message}`);
+            }
+        }
+
+        function openConfirmDialog({ title, message, confirmText, cancelText = 'Cancelar', danger = false }) {
+            if (confirmDialogResolver) closeConfirmDialog(false);
+
+            const dialog = document.getElementById('confirmDialog');
+            const icon = document.getElementById('confirmDialogIcon');
+            const eyebrow = document.getElementById('confirmDialogEyebrow');
+            const acceptButton = document.getElementById('confirmDialogAccept');
+            document.getElementById('confirmDialogTitle').textContent = title;
+            document.getElementById('confirmDialogMessage').textContent = message;
+            acceptButton.textContent = confirmText;
+            document.getElementById('confirmDialogCancel').textContent = cancelText;
+            eyebrow.textContent = danger ? 'Acción irreversible' : 'Cambios sin guardar';
+            eyebrow.className = `text-[11px] font-bold uppercase tracking-wider ${danger ? 'text-rose-600' : 'text-amber-600'}`;
+            icon.className = `flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${danger ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`;
+            acceptButton.className = `rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${danger ? 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-500' : 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500'}`;
+            confirmDialogPreviousFocus = document.activeElement;
+            dialog.classList.remove('hidden');
+            dialog.classList.add('flex');
+            acceptButton.focus();
+
+            return new Promise(resolve => {
+                confirmDialogResolver = resolve;
+                document.addEventListener('keydown', handleConfirmDialogKeydown);
+            });
+        }
+
+        function closeConfirmDialog(confirmed) {
+            const dialog = document.getElementById('confirmDialog');
+            if (!dialog || !confirmDialogResolver) return;
+            dialog.classList.add('hidden');
+            dialog.classList.remove('flex');
+            document.removeEventListener('keydown', handleConfirmDialogKeydown);
+            const resolve = confirmDialogResolver;
+            confirmDialogResolver = null;
+            resolve(confirmed);
+            if (confirmDialogPreviousFocus instanceof HTMLElement) confirmDialogPreviousFocus.focus();
+            confirmDialogPreviousFocus = null;
+        }
+
+        function handleConfirmDialogBackdrop(event) {
+            if (event.target === event.currentTarget) closeConfirmDialog(false);
+        }
+
+        function handleConfirmDialogKeydown(event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeConfirmDialog(false);
+            }
+        }
+
+        window.initApp = function() {
+            if (!window.clientsData || window.clientsData.length === 0) return;
+            if (!window.currentClientId) {
+                window.currentClientId = window.clientsData[0].id;
+                window.currentLoanId = window.clientsData[0].activeLoanId || window.clientsData[0].loans?.[0]?.id || null;
+            }
+            renderClientDropdown();
+            renderClientsModuleList();
+            loadCurrentClientInfo();
+            loadCurrentLoanToForm();
+            calculateLoan();
+            renderDashboard();
+        };
+
+        function showToast(message) {
+            const toast = document.getElementById('toastNotification');
+            const msg = document.getElementById('toastMessage');
+            if (!toast || !msg) return;
+            msg.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3500);
+        }
+
+        function saveToStorage() {
+            const client = window.clientsData?.find(c => c.id === window.currentClientId);
+            if (!client) return Promise.resolve();
+            try {
+                localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+            } catch (error) {
+                console.error('Local data persistence error:', error);
+                showToast(`No se pudo guardar la copia local: ${error.message}`);
+            }
+            if (!window.saveClientToCloud) {
+                const error = new Error('Firebase todavía no está disponible.');
+                showToast(error.message);
+                return Promise.reject(error);
+            }
+            const syncPromise = window.saveClientToCloud(client);
+            syncPromise.catch(error => {
+                console.error('Firebase client save error:', error);
+                const badge = document.getElementById('cloudStatusBadge');
+                if (badge) badge.innerHTML = '<span class="w-2 h-2 bg-rose-400 rounded-full"></span> Error al guardar';
+                showToast(`Los cambios quedaron solo en este dispositivo; Firebase no los guardó: ${error.message}`);
+            });
+            return syncPromise;
+        }
+
+        function switchTab(tabId) {
+            ['dashboard', 'clients', 'loans'].forEach(t => {
+                const mod = document.getElementById(`module-${t}`);
+                const btn = document.getElementById(`tabBtn-${t}`);
+                const mob = document.getElementById(`mobileNav-${t}`);
+                if (mod) mod.classList.add('hidden');
+                if (btn) {
+                    btn.className = "w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition";
+                    btn.removeAttribute('aria-current');
+                }
+                if (mob) mob.className = "flex flex-col items-center gap-1 text-slate-400 font-medium text-[11px] py-1 px-3 rounded-xl transition";
+            });
+
+            document.getElementById(`module-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tabBtn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.className = "w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition bg-blue-600 text-white shadow";
+                activeBtn.setAttribute('aria-current', 'page');
+            }
+            const activeMob = document.getElementById(`mobileNav-${tabId}`);
+            if (activeMob) activeMob.className = "flex flex-col items-center gap-1 text-blue-400 font-bold text-[11px] py-1 px-3 rounded-xl transition";
+
+            if (tabId === 'dashboard') renderDashboard();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderClientDropdown() {
+            const select = document.getElementById('clientSelect');
+            if (!select || !window.clientsData) return;
+            select.innerHTML = '';
+            window.clientsData.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = `${c.name} (${c.idNumber || 'Sin Cédula'})`;
+                if (c.id === window.currentClientId) opt.selected = true;
+                select.appendChild(opt);
+            });
+            renderLoanDropdown();
+        }
+
+        function renderLoanDropdown() {
+            const select = document.getElementById('loanSelect');
+            if (!select || !window.clientsData) return;
+            select.innerHTML = '';
+            const client = window.clientsData.find(c => c.id === window.currentClientId);
+            if (client && client.loans) {
+                client.loans.forEach(l => {
+                    const opt = document.createElement('option');
+                    opt.value = l.id;
+                    opt.textContent = `${l.loanName} - ₡${Number(l.loanAmount).toLocaleString('es-CR')}`;
+                    if (l.id === window.currentLoanId) opt.selected = true;
+                    select.appendChild(opt);
+                });
+            }
+        }
+
+        async function switchClient() {
+            if (!await confirmDiscardLoanEdit()) {
+                renderClientDropdown();
+                return;
+            }
+            window.currentClientId = document.getElementById('clientSelect').value;
+            const client = window.clientsData.find(c => c.id === window.currentClientId);
+            if (client && client.loans && client.loans.length > 0) {
+                window.currentLoanId = client.activeLoanId || client.loans[0].id;
+            } else {
+                window.currentLoanId = null;
+            }
+            renderLoanDropdown();
+            loadCurrentClientInfo();
+            loadCurrentLoanToForm();
+            calculateLoan();
+            renderClientsModuleList();
+        }
+
+        async function switchLoan() {
+            if (!await confirmDiscardLoanEdit()) {
+                renderLoanDropdown();
+                return;
+            }
+            window.currentLoanId = document.getElementById('loanSelect').value;
+            const client = window.clientsData.find(c => c.id === window.currentClientId);
+            if (client) client.activeLoanId = window.currentLoanId;
+            saveToStorage();
+            loadCurrentLoanToForm();
+            calculateLoan();
+        }
+
+        function getCurrentLoanObj() {
+            if (!window.clientsData) return null;
+            const client = window.clientsData.find(c => c.id === window.currentClientId);
+            if (!client || !client.loans) return null;
+            return client.loans.find(l => l.id === window.currentLoanId) || client.loans[0] || null;
+        }
+
+        function loadCurrentLoanToForm() {
+            const loan = getCurrentLoanObj();
+            if (!loan) {
+                ['loanName', 'debtorName', 'loanAmount', 'monthlyInterestRate', 'monthlyInterest', 'startDate', 'endDate', 'asOfDate']
+                    .forEach(id => { document.getElementById(id).value = ''; });
+                setLoanFormEditing(false);
+                return;
+            }
+            document.getElementById('loanName').value = loan.loanName || '';
+            document.getElementById('debtorName').value = loan.debtorName || '';
+            document.getElementById('loanAmount').value = loan.loanAmount || 100000;
+            document.getElementById('monthlyInterestRate').value = loan.monthlyInterestRate || 3.445;
+            document.getElementById('monthlyInterest').value = loan.monthlyInterest || 3445;
+            document.getElementById('startDate').value = formatDateForInput(loan.startDate || '2026-01-16');
+            document.getElementById('endDate').value = formatDateForInput(loan.endDate || '2027-01-16');
+            document.getElementById('frequency').value = loan.frequency || 'quincenal';
+            document.getElementById('asOfDate').value = formatDateForInput(loan.asOfDate || '2026-10-16');
+            setLoanFormEditing(false);
+        }
+
+        function setLoanFormEditing(editing) {
+            isEditingLoan = editing;
+            const hasLoan = !!getCurrentLoanObj();
+            ['loanName', 'debtorName', 'loanAmount', 'monthlyInterestRate', 'monthlyInterest', 'startDate', 'endDate', 'frequency', 'asOfDate']
+                .forEach(id => { document.getElementById(id).disabled = !editing || !hasLoan; });
+            ['startDateCalendarButton', 'endDateCalendarButton', 'asOfDateCalendarButton']
+                .forEach(id => { document.getElementById(id).disabled = !editing || !hasLoan; });
+            document.getElementById('editLoanButton').classList.toggle('hidden', editing || !hasLoan);
+            document.getElementById('deleteLoanButton').classList.toggle('hidden', editing || !hasLoan);
+            document.getElementById('saveLoanChangesButton').classList.toggle('hidden', !editing || !hasLoan);
+            document.getElementById('cancelLoanEditButton').classList.toggle('hidden', !editing || !hasLoan);
+            const loan = getCurrentLoanObj();
+            document.getElementById('loanEditHint').textContent = editing
+                ? 'La cuota y la cantidad de pagos se actualizan con sus cambios. Seleccione “Guardar crédito” para conservarlos.'
+                : loan
+                    ? `El avance se calcula automáticamente hasta la fecha de corte: ${loan.asOfDate || 'no definida'}.`
+                    : 'Registre un crédito para comenzar.';
+        }
+
+        function previewLoanChanges() {
+            if (!isEditingLoan) return;
+            const loan = getCurrentLoanObj();
+            if (!loan) return;
+            calculateLoan({
+                    ...loan,
+                    loanName: document.getElementById('loanName').value.trim(),
+                    debtorName: document.getElementById('debtorName').value.trim(),
+                    loanAmount: Number(document.getElementById('loanAmount').value),
+                    monthlyInterestRate: Number(document.getElementById('monthlyInterestRate').value),
+                    monthlyInterest: Number(document.getElementById('monthlyInterest').value),
+                    startDate: parseDateInput(document.getElementById('startDate').value) || '',
+                    endDate: parseDateInput(document.getElementById('endDate').value) || '',
+                    frequency: document.getElementById('frequency').value,
+                    asOfDate: parseDateInput(document.getElementById('asOfDate').value) || ''
+            });
+        }
+
+        async function confirmDiscardLoanEdit() {
+            if (!isEditingLoan) return true;
+            const confirmed = await openConfirmDialog({
+                title: '¿Descartar los cambios?',
+                message: 'Los cambios que realizó en este crédito todavía no se han guardado.',
+                confirmText: 'Descartar cambios',
+                cancelText: 'Seguir editando'
+            });
+            if (!confirmed) return false;
+            loadCurrentLoanToForm();
+            return true;
+        }
+
+        function startEditingCurrentLoan() {
+            if (!getCurrentLoanObj()) return;
+            switchTab('loans');
+            setLoanFormEditing(true);
+            document.getElementById('loanName').focus();
+        }
+
+        function cancelLoanEdit() {
+            loadCurrentLoanToForm();
+            calculateLoan();
+            renderDashboard();
+            showToast('Cambios descartados');
+        }
+
+        async function deleteCurrentLoan() {
+            const client = window.clientsData?.find(c => c.id === window.currentClientId);
+            const loan = getCurrentLoanObj();
+            if (!client || !loan) return;
+            const confirmed = await openConfirmDialog({
+                title: '¿Eliminar este crédito?',
+                message: `Se eliminará "${loan.loanName}". Esta acción no se puede deshacer.`,
+                confirmText: 'Sí, eliminar crédito',
+                danger: true
+            });
+            if (!confirmed) return;
+
+            try {
+                await removePaymentProofsForLoan(loan);
+            } catch (error) {
+                console.error('Error al eliminar comprobantes del crédito:', error);
+                showToast(`No se pudo eliminar el crédito porque no fue posible borrar sus comprobantes locales: ${error.message}`);
+                return;
+            }
+
+            client.loans = client.loans.filter(item => item.id !== loan.id);
+            if (client.activeLoanId === loan.id || !client.loans.some(item => item.id === client.activeLoanId)) {
+                client.activeLoanId = client.loans[0]?.id || null;
+            }
+            window.currentLoanId = client.activeLoanId;
+            saveToStorage();
+            renderLoanDropdown();
+            loadCurrentLoanToForm();
+            calculateLoan();
+            renderDashboard();
+            showToast('Crédito eliminado');
+        }
+
+        async function openNewClientModal() {
+            if (!await confirmDiscardLoanEdit()) return;
+            document.getElementById('modalNewClientName').value = '';
+            document.getElementById('modalNewClientId').value = '';
+            document.getElementById('newClientModal').classList.remove('hidden');
+        }
+
+        function closeNewClientModal() {
+            document.getElementById('newClientModal').classList.add('hidden');
+        }
+
+        function saveNewClientFromModal() {
+            const name = document.getElementById('modalNewClientName').value.trim();
+            if (!name) { showToast('Ingrese el nombre del cliente'); return; }
+            const idNum = document.getElementById('modalNewClientId').value.trim();
+            
+            const newId = 'c_' + Date.now();
+            const newLoanId = 'l_' + Date.now();
+            const loanStartDate = getLocalDateString();
+            const loanEndDate = new Date();
+            loanEndDate.setFullYear(loanEndDate.getFullYear() + 1);
+            
+            const newClient = {
+                id: newId, name: name, idNumber: idNum, phone: '', email: '', address: '',
+                idDocName: '', patronalDocName: '', activeLoanId: newLoanId,
+                loans: [{
+                    id: newLoanId, loanName: `Prestamo-${name.replace(/\s+/g, '')}`, debtorName: name,
+                    loanAmount: 100000, monthlyInterestRate: 3.445, monthlyInterest: 3445,
+                    startDate: loanStartDate,
+                    endDate: getLocalDateString(loanEndDate),
+                    frequency: 'quincenal', asOfDate: loanStartDate,
+                    customPaidState: {}, paymentsInfo: {}
+                }]
+            };
+
+            window.clientsData.push(newClient);
+            window.currentClientId = newId;
+            window.currentLoanId = newLoanId;
+            saveToStorage();
+            closeNewClientModal();
+            renderClientDropdown();
+            renderClientsModuleList();
+            loadCurrentClientInfo();
+            loadCurrentLoanToForm();
+            calculateLoan();
+            switchTab('loans');
+            setLoanFormEditing(true);
+            renderDashboard();
+            showToast('¡Cliente registrado exitosamente!');
+        }
+
+        async function openNewLoanModal() {
+            if (!await confirmDiscardLoanEdit()) return;
+            const client = window.clientsData?.find(c => c.id === window.currentClientId);
+            if (!client) return;
+            const today = getLocalDateString();
+            const endDate = new Date();
+            endDate.setFullYear(endDate.getFullYear() + 1);
+            document.getElementById('modalNewLoanName').value = `Prestamo-${client.name.replace(/\s+/g, '')}`;
+            document.getElementById('modalNewLoanAmount').value = '100000';
+            document.getElementById('modalNewLoanRate').value = '3.445';
+            document.getElementById('modalNewLoanStartDate').value = formatDateForInput(today);
+            document.getElementById('modalNewLoanEndDate').value = formatDateForInput(getLocalDateString(endDate));
+            document.getElementById('modalNewLoanFrequency').value = 'quincenal';
+            document.getElementById('modalNewLoanAsOfDate').value = formatDateForInput(today);
+            previewNewLoan();
+            document.getElementById('newLoanModal').classList.remove('hidden');
+        }
+
+        function getLocalDateString(date = new Date()) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDateForInput(isoDate) {
+            const parsedDate = parseDateInput(isoDate);
+            if (!parsedDate) return '';
+            const [year, month, day] = parsedDate.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
+        function formatDateField(input) {
+            const digits = input.value.replace(/\D/g, '').slice(0, 8);
+            if (digits.length <= 2) {
+                input.value = digits;
+            } else if (digits.length <= 4) {
+                input.value = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+            } else {
+                input.value = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+            }
+        }
+
+        function openDatePicker(pickerId, textInputId) {
+            const picker = document.getElementById(pickerId);
+            const textInput = document.getElementById(textInputId);
+            if (!picker || !textInput || textInput.disabled) return;
+            picker.value = parseDateInput(textInput.value) || '';
+            try {
+                if (typeof picker.showPicker === 'function') picker.showPicker();
+                else picker.click();
+            } catch (error) {
+                console.error('Error al abrir calendario:', error);
+                showToast('No se pudo abrir el calendario. Ingrese la fecha como dd/mm/aaaa.');
+            }
+        }
+
+        function syncDateFromCalendar(picker, textInputId) {
+            const textInput = document.getElementById(textInputId);
+            if (!textInput || !picker.value) return;
+            textInput.value = formatDateForInput(picker.value);
+            textInput.dispatchEvent(new Event('input', { bubbles: true }));
+            textInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function parseDateInput(displayDate) {
+            const value = (displayDate || '').trim();
+            const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+            const legacyMatch = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+            if (!isoMatch && !legacyMatch) return null;
+            const [, yearText, monthText, dayText] = isoMatch || [null, legacyMatch[3], legacyMatch[2], legacyMatch[1]];
+            const day = Number(dayText);
+            const month = Number(monthText);
+            const year = Number(yearText);
+            const date = new Date(year, month - 1, day);
+            if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+            return `${yearText}-${monthText}-${dayText}`;
+        }
+
+        function getLoanFinancialSummary(loan) {
+            const { dates, monthsCount } = getLoanSchedule(loan);
+            const installmentCount = dates.length;
+            const totalCapital = Number(loan.loanAmount) || 0;
+            const totalInterest = (Number(loan.monthlyInterest) || 0) * monthsCount;
+            const totalRepayment = totalCapital + totalInterest;
+            return {
+                dates,
+                monthsCount,
+                installmentCount,
+                totalCapital,
+                totalInterest,
+                totalRepayment,
+                capitalPerInstallment: installmentCount ? totalCapital / installmentCount : 0,
+                interestPerInstallment: installmentCount ? totalInterest / installmentCount : 0,
+                installmentAmount: installmentCount ? totalRepayment / installmentCount : 0
+            };
+        }
+
+        function previewNewLoan() {
+            const amount = Number(document.getElementById('modalNewLoanAmount').value);
+            const rate = Number(document.getElementById('modalNewLoanRate').value);
+            const monthlyInterest = Number.isFinite(amount) && Number.isFinite(rate) ? amount * rate / 100 : 0;
+            document.getElementById('modalNewLoanInterest').value = monthlyInterest.toFixed(2);
+
+            const loan = {
+                startDate: parseDateInput(document.getElementById('modalNewLoanStartDate').value) || '',
+                endDate: parseDateInput(document.getElementById('modalNewLoanEndDate').value) || '',
+                frequency: document.getElementById('modalNewLoanFrequency').value
+            };
+            const validAmount = Number.isFinite(amount) && amount > 0;
+            const validRate = Number.isFinite(rate) && rate >= 0;
+            const countElement = document.getElementById('modalNewLoanInstallmentCount');
+            const amountElement = document.getElementById('modalNewLoanInstallmentAmount');
+            const summary = getLoanFinancialSummary({ ...loan, loanAmount: amount, monthlyInterest });
+            if (!validAmount || !validRate || summary.installmentCount === 0) {
+                countElement.textContent = 'Revise el monto y las fechas';
+                amountElement.textContent = 'Cuota: —';
+                ['modalNewLoanTotalCapital', 'modalNewLoanTotalInterest', 'modalNewLoanTotalRepayment', 'modalNewLoanCapitalPerInstallment', 'modalNewLoanInterestPerInstallment']
+                    .forEach(id => { document.getElementById(id).textContent = '—'; });
+                return;
+            }
+
+            countElement.textContent = `${summary.installmentCount} cuotas programadas`;
+            amountElement.textContent = `Cuota: ${formatMoney(summary.installmentAmount)}`;
+            document.getElementById('modalNewLoanTotalCapital').textContent = formatMoney(summary.totalCapital);
+            document.getElementById('modalNewLoanTotalInterest').textContent = formatMoney(summary.totalInterest);
+            document.getElementById('modalNewLoanTotalRepayment').textContent = formatMoney(summary.totalRepayment);
+            document.getElementById('modalNewLoanCapitalPerInstallment').textContent = formatMoney(summary.capitalPerInstallment);
+            document.getElementById('modalNewLoanInterestPerInstallment').textContent = formatMoney(summary.interestPerInstallment);
+        }
+
+        function closeNewLoanModal() {
+            document.getElementById('newLoanModal').classList.add('hidden');
+        }
+
+        function saveNewLoanFromModal() {
+            const client = window.clientsData?.find(c => c.id === window.currentClientId);
+            if (!client) return;
+            const name = document.getElementById('modalNewLoanName').value.trim();
+            const amount = Number(document.getElementById('modalNewLoanAmount').value);
+            const monthlyInterestRate = Number(document.getElementById('modalNewLoanRate').value);
+            const startDate = parseDateInput(document.getElementById('modalNewLoanStartDate').value);
+            const endDate = parseDateInput(document.getElementById('modalNewLoanEndDate').value);
+            const asOfDate = parseDateInput(document.getElementById('modalNewLoanAsOfDate').value);
+            const frequency = document.getElementById('modalNewLoanFrequency').value;
+            const { dates } = getLoanSchedule({ startDate, endDate, frequency });
+            if (!name) { showToast('Ingrese un nombre para el préstamo'); return; }
+            if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(monthlyInterestRate) || monthlyInterestRate < 0) {
+                showToast('Ingrese un monto y una tasa de interés válidos');
+                return;
+            }
+            if (!startDate || !endDate || !asOfDate || dates.length === 0) {
+                showToast('Seleccione fechas válidas y revise que el vencimiento sea posterior al inicio.');
+                return;
+            }
+
+            const newLoanId = 'l_' + Date.now();
+            const newLoan = {
+                id: newLoanId, loanName: name, debtorName: client.name, loanAmount: amount,
+                monthlyInterestRate, monthlyInterest: amount * monthlyInterestRate / 100,
+                startDate, endDate, frequency, asOfDate,
+                customPaidState: {}, paymentsInfo: {}
+            };
+
+            client.loans.push(newLoan);
+            client.activeLoanId = newLoanId;
+            window.currentLoanId = newLoanId;
+            saveToStorage();
+            closeNewLoanModal();
+            renderLoanDropdown();
+            loadCurrentLoanToForm();
+            calculateLoan();
+            switchTab('loans');
+            setLoanFormEditing(true);
+            renderDashboard();
+            showToast('¡Nuevo préstamo creado!');
+        }
+
+        function addNewLoanToClient() {
+            openNewLoanModal();
+        }
+
+        function renderClientsModuleList() {
+            const container = document.getElementById('clientListGroup');
+            if (!container || !window.clientsData) return;
+            container.innerHTML = '';
+
+            window.clientsData.forEach(c => {
+                const item = document.createElement('div');
+                const isSelected = c.id === window.currentClientId;
+                item.className = `p-3 rounded-xl border transition cursor-pointer flex justify-between items-center ${isSelected ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'}`;
+                item.onclick = async () => {
+                    if (!await confirmDiscardLoanEdit()) return;
+                    window.currentClientId = c.id;
+                    if (c.loans.length > 0) window.currentLoanId = c.activeLoanId || c.loans[0].id;
+                    renderClientsModuleList();
+                    loadCurrentClientInfo();
+                    renderClientDropdown();
+                    loadCurrentLoanToForm();
+                    calculateLoan();
+                };
+                item.innerHTML = `
+                    <div>
+                        <div class="text-xs font-bold">${c.name}</div>
+                        <div class="text-[11px] text-slate-500 font-normal">Céd: ${c.idNumber || 'Sin cédula'} • ${c.loans?.length || 0} préstamo(s)</div>
+                    </div>
+                    <div class="text-xs text-blue-600">→</div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function loadCurrentClientInfo() {
+            if (!window.clientsData) return;
+            const client = window.clientsData.find(c => c.id === window.currentClientId);
+            if (!client) return;
+
+            document.getElementById('clientFormTitle').textContent = client.name;
+            document.getElementById('clientFormName').value = client.name;
+            document.getElementById('clientFormId').value = client.idNumber || '';
+            document.getElementById('clientFormPhone').value = client.phone || '';
+            document.getElementById('clientFormEmail').value = client.email || '';
+            document.getElementById('clientFormAddress').value = client.address || '';
+
+            document.getElementById('idDocPreview').textContent = client.idDocName ? `📄 ${client.idDocName}` : '';
+            document.getElementById('idDocBadge').textContent = client.idDocStoragePath
+                ? 'En Firebase'
+                : client.idDocName ? 'Vuelva a adjuntar' : 'Sin Archivo';
+            document.getElementById('patronalDocPreview').textContent = client.patronalDocName ? `📄 ${client.patronalDocName}` : '';
+            document.getElementById('patronalDocBadge').textContent = client.patronalDocStoragePath
+                ? 'En Firebase'
+                : client.patronalDocName ? 'Vuelva a adjuntar' : 'Sin Archivo';
+            document.getElementById('idDocViewButton').classList.toggle('hidden', !client.idDocStoragePath);
+            document.getElementById('patronalDocViewButton').classList.toggle('hidden', !client.patronalDocStoragePath);
+        }
+
+        async function handleFileUpload(inputId, previewId, badgeId) {
+            const input = document.getElementById(inputId);
+            const client = window.clientsData?.find(c => c.id === window.currentClientId);
+            const file = input.files[0];
+            if (!file || !client) return;
+            const isIdentityDocument = inputId === 'idDocFile';
+            const nameProperty = isIdentityDocument ? 'idDocName' : 'patronalDocName';
+            const pathProperty = isIdentityDocument ? 'idDocStoragePath' : 'patronalDocStoragePath';
+            const previousName = client[nameProperty];
+            const previousPath = client[pathProperty];
+            let uploadedPath = '';
+            document.getElementById(badgeId).textContent = 'Subiendo…';
+            try {
+                const path = window.firebaseClientStoragePath(client.id, `documents/${isIdentityDocument ? 'identity' : 'income'}/${Date.now()}`);
+                uploadedPath = await window.uploadFileToFirebase(path, file);
+                client[nameProperty] = file.name;
+                client[pathProperty] = uploadedPath;
+                await saveToStorage();
+                if (previousPath && previousPath !== uploadedPath) {
+                    try {
+                        await window.deleteFileFromFirebase(previousPath);
+                    } catch (error) {
+                        console.error('Previous client document cleanup error:', error);
+                        showToast(`El documento nuevo se guardó, pero no se pudo borrar el anterior: ${error.message}`);
+                    }
+                }
+                document.getElementById(previewId).textContent = `📄 ${file.name}`;
+                document.getElementById(badgeId).textContent = 'En Firebase';
+                document.getElementById(isIdentityDocument ? 'idDocViewButton' : 'patronalDocViewButton').classList.remove('hidden');
+                showToast('Documento guardado en Firebase');
+            } catch (error) {
+                client[nameProperty] = previousName;
+                client[pathProperty] = previousPath;
+                input.value = '';
+                try {
+                    localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+                } catch (storageError) {
+                    console.error('Could not restore the local client document metadata:', storageError);
+                }
+                if (uploadedPath) {
+                    try {
+                        await window.deleteFileFromFirebase(uploadedPath);
+                    } catch (cleanupError) {
+                        console.error('Could not clean up an unreferenced client document:', cleanupError);
+                        showToast(`No se guardaron los datos del documento y quedó un archivo sin referencia en Firebase: ${cleanupError.message}`);
+                    }
+                }
+                document.getElementById(badgeId).textContent = previousPath ? 'En Firebase' : previousName ? 'Vuelva a adjuntar' : 'Sin Archivo';
+                console.error('Client document upload error:', error);
+                showToast(`No se pudo guardar el documento en Firebase: ${error.message}`);
+            }
+        }
+
+        async function viewClientDocument(documentType) {
+            const client = window.clientsData?.find(item => item.id === window.currentClientId);
+            const isIdentityDocument = documentType === 'idDoc';
+            const path = client?.[isIdentityDocument ? 'idDocStoragePath' : 'patronalDocStoragePath'];
+            const name = client?.[isIdentityDocument ? 'idDocName' : 'patronalDocName'];
+            if (!path) {
+                showToast('Este documento no está guardado en Firebase. Vuelva a adjuntarlo para sincronizarlo.');
+                return;
+            }
+            try {
+                const file = await window.loadFileFromFirebase(path);
+                showPaymentProof(file, name);
+            } catch (error) {
+                console.error('Client document download error:', error);
+                showToast(`No se pudo abrir el documento: ${error.message}`);
+            }
+        }
+
+        async function saveCurrentClientInfo() {
+            if (!await confirmDiscardLoanEdit()) return;
+            const client = window.clientsData?.find(c => c.id === window.currentClientId);
+            if (!client) return;
+            client.name = document.getElementById('clientFormName').value;
+            client.idNumber = document.getElementById('clientFormId').value;
+            client.phone = document.getElementById('clientFormPhone').value;
+            client.email = document.getElementById('clientFormEmail').value;
+            client.address = document.getElementById('clientFormAddress').value;
+            if (client.loans) client.loans.forEach(l => l.debtorName = client.name);
+            saveToStorage();
+            renderClientsModuleList();
+            renderClientDropdown();
+            loadCurrentLoanToForm();
+            calculateLoan();
+            showToast('¡Expediente guardado!');
+        }
+
+        function saveCurrentLoanData() {
+            const loan = getCurrentLoanObj();
+            if (!loan || !isEditingLoan) return;
+            const loanName = document.getElementById('loanName').value.trim();
+            const debtorName = document.getElementById('debtorName').value.trim();
+            const loanAmount = Number(document.getElementById('loanAmount').value);
+            const monthlyInterestRate = Number(document.getElementById('monthlyInterestRate').value);
+            const monthlyInterest = Number(document.getElementById('monthlyInterest').value);
+            const startDate = parseDateInput(document.getElementById('startDate').value);
+            const endDate = parseDateInput(document.getElementById('endDate').value);
+            const asOfDate = parseDateInput(document.getElementById('asOfDate').value);
+            if (!loanName || !debtorName) { showToast('El nombre del crédito y del deudor son obligatorios'); return; }
+            if (!Number.isFinite(loanAmount) || loanAmount <= 0 ||
+                !Number.isFinite(monthlyInterestRate) || monthlyInterestRate < 0 ||
+                !Number.isFinite(monthlyInterest) || monthlyInterest < 0) {
+                showToast('Revise el monto y los valores de interés');
+                return;
+            }
+            if (!startDate || !endDate || !asOfDate || endDate < startDate) {
+                showToast('Seleccione fechas válidas y verifique su orden.');
+                return;
+            }
+            loan.loanName = loanName;
+            loan.debtorName = debtorName;
+            loan.loanAmount = loanAmount;
+            loan.monthlyInterestRate = monthlyInterestRate;
+            loan.monthlyInterest = monthlyInterest;
+            loan.startDate = startDate;
+            loan.endDate = endDate;
+            loan.frequency = document.getElementById('frequency').value;
+            loan.asOfDate = asOfDate;
+            saveToStorage();
+            setLoanFormEditing(false);
+            renderLoanDropdown();
+            calculateLoan();
+            renderDashboard();
+            showToast('Crédito actualizado');
+        }
+
+        function onRateChange() {
+            const amount = parseFloat(document.getElementById('loanAmount').value) || 0;
+            const rate = parseFloat(document.getElementById('monthlyInterestRate').value) || 0;
+            document.getElementById('monthlyInterest').value = ((amount * rate) / 100).toFixed(2);
+            previewLoanChanges();
+        }
+
+        function onAmountChange() {
+            const amount = parseFloat(document.getElementById('loanAmount').value) || 0;
+            const rate = parseFloat(document.getElementById('monthlyInterestRate').value) || 0;
+            document.getElementById('monthlyInterest').value = ((amount * rate) / 100).toFixed(2);
+            previewLoanChanges();
+        }
+
+        function onMonthlyInterestChange() {
+            const amount = parseFloat(document.getElementById('loanAmount').value) || 0;
+            const monthlyInterest = parseFloat(document.getElementById('monthlyInterest').value) || 0;
+            if (amount > 0) {
+                document.getElementById('monthlyInterestRate').value = ((monthlyInterest / amount) * 100).toFixed(3);
+            }
+            previewLoanChanges();
+        }
+
+        function formatMoney(amount) {
+            return '₡' + Number(amount).toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function getLoanSchedule(loan) {
+            const start = new Date(`${loan.startDate}T00:00:00`);
+            const end = new Date(`${loan.endDate}T00:00:00`);
+            const isValidDate = date => Number.isFinite(date.getTime());
+            if (!isValidDate(start) || !isValidDate(end) || end < start) {
+                return { dates: [], monthsCount: 0 };
+            }
+
+            const monthsCount = Math.max(
+                1,
+                (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
+            );
+
+            const dates = [];
+            for (let index = 1; ; index++) {
+                const paymentDate = new Date(start);
+                if (loan.frequency !== 'quincenal' && loan.frequency !== 'semanal') {
+                    const targetMonth = new Date(start.getFullYear(), start.getMonth() + index, 1);
+                    const lastDayOfMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate();
+                    paymentDate.setFullYear(targetMonth.getFullYear(), targetMonth.getMonth(), Math.min(start.getDate(), lastDayOfMonth));
+                } else {
+                    const intervalDays = loan.frequency === 'quincenal' ? 15 : 7;
+                    paymentDate.setDate(start.getDate() + index * intervalDays);
+                }
+
+                if (paymentDate > end) break;
+                dates.push(paymentDate);
+            }
+
+            return { dates, monthsCount };
+        }
+
+        function calculateLoan(loanOverride = null) {
+            const loanObj = loanOverride || getCurrentLoanObj();
+            if (!loanObj) {
+                calculatedRows = [];
+                document.getElementById('calculatedInstallment').textContent = formatMoney(0);
+                document.getElementById('loanTotalCapital').textContent = formatMoney(0);
+                document.getElementById('loanTotalInterest').textContent = formatMoney(0);
+                document.getElementById('loanTotalRepayment').textContent = formatMoney(0);
+                document.getElementById('loanCapitalPerInstallment').textContent = formatMoney(0);
+                document.getElementById('loanInterestPerInstallment').textContent = formatMoney(0);
+                document.getElementById('progressBarFill').style.width = '0%';
+                document.getElementById('progressPercent').textContent = '0%';
+                document.getElementById('progressLeftText').textContent = '0 de 0 cuotas abonadas';
+                document.getElementById('progressRightText').textContent = 'Faltan 0 cuotas';
+                document.getElementById('cardLoanAmount').textContent = formatMoney(0);
+                document.getElementById('cardLoanSub').textContent = '0 cuotas programadas';
+                document.getElementById('cardTotalPaid').textContent = formatMoney(0);
+                document.getElementById('cardPaidCount').textContent = '0 cuotas abonadas';
+                document.getElementById('cardCapitalRemaining').textContent = formatMoney(0);
+                document.getElementById('cardCapitalPaidSub').textContent = `${formatMoney(0)} pagado`;
+                document.getElementById('cardTotalRemaining').textContent = formatMoney(0);
+                renderScheduleTable();
+                return;
+            }
+
+            const asOf = new Date(loanObj.asOfDate + 'T00:00:00');
+            const summary = getLoanFinancialSummary(loanObj);
+            const { dates: paymentDates, installmentCount: totalInstallments } = summary;
+            if (totalInstallments === 0) {
+                calculatedRows = [];
+                document.getElementById('calculatedInstallment').textContent = formatMoney(0);
+                document.getElementById('loanTotalCapital').textContent = formatMoney(0);
+                document.getElementById('loanTotalInterest').textContent = formatMoney(0);
+                document.getElementById('loanTotalRepayment').textContent = formatMoney(0);
+                document.getElementById('loanCapitalPerInstallment').textContent = formatMoney(0);
+                document.getElementById('loanInterestPerInstallment').textContent = formatMoney(0);
+                recalculateTotalsFromState(loanObj);
+                return;
+            }
+            document.getElementById('loanTotalCapital').textContent = formatMoney(summary.totalCapital);
+            document.getElementById('loanTotalInterest').textContent = formatMoney(summary.totalInterest);
+            document.getElementById('loanTotalRepayment').textContent = formatMoney(summary.totalRepayment);
+            document.getElementById('loanCapitalPerInstallment').textContent = formatMoney(summary.capitalPerInstallment);
+            document.getElementById('loanInterestPerInstallment').textContent = formatMoney(summary.interestPerInstallment);
+
+            calculatedRows = [];
+            let currentBalance = summary.totalCapital;
+
+            for (let i = 1; i <= totalInstallments; i++) {
+                const currDate = paymentDates[i - 1];
+                currentBalance -= summary.capitalPerInstallment;
+                if (currentBalance < 0.01) currentBalance = 0;
+
+                const formattedDate = `${String(currDate.getDate()).padStart(2, '0')}/${String(currDate.getMonth() + 1).padStart(2, '0')}/${currDate.getFullYear()}`;
+                const defaultPaid = currDate <= asOf;
+                const isPaid = (loanObj.customPaidState && loanObj.customPaidState[i] !== undefined) ? loanObj.customPaidState[i] : defaultPaid;
+
+                calculatedRows.push({
+                    cuotaNum: i, fecha: formattedDate,
+                    cuota: summary.installmentAmount, capital: summary.capitalPerInstallment,
+                    interes: summary.interestPerInstallment, saldo: currentBalance, isPaid: isPaid
+                });
+            }
+
+            document.getElementById('calculatedInstallment').textContent = formatMoney(summary.installmentAmount);
+            recalculateTotalsFromState(loanObj);
+        }
+
+        function recalculateTotalsFromState(loanOverride = null) {
+            const loanObj = loanOverride || getCurrentLoanObj();
+            if (!loanObj) return;
+
+            let totalPaidAmount = 0, totalPaidCapital = 0, paidCount = 0;
+            calculatedRows.forEach(r => {
+                if (r.isPaid) {
+                    paidCount++;
+                    const payInfo = loanObj.paymentsInfo ? loanObj.paymentsInfo[r.cuotaNum] : null;
+                    totalPaidAmount += payInfo?.realAmount ? payInfo.realAmount : r.cuota;
+                    totalPaidCapital += r.capital;
+                }
+            });
+
+            const totalInstallments = calculatedRows.length;
+            const progressPct = totalInstallments > 0 ? Math.round((paidCount / totalInstallments) * 100) : 0;
+            
+            document.getElementById('progressBarFill').style.width = `${progressPct}%`;
+            document.getElementById('progressPercent').textContent = `${progressPct}%`;
+            document.getElementById('progressLeftText').textContent = `${paidCount} de ${totalInstallments} cuotas abonadas`;
+            document.getElementById('progressRightText').textContent = `Faltan ${totalInstallments - paidCount} cuotas`;
+
+            const capitalRemaining = Math.max(0, loanObj.loanAmount - totalPaidCapital);
+            const totalContractDebt = calculatedRows.reduce((acc, r) => acc + r.cuota, 0);
+            const totalRemaining = Math.max(0, totalContractDebt - totalPaidAmount);
+
+            document.getElementById('cardLoanAmount').textContent = formatMoney(loanObj.loanAmount);
+            document.getElementById('cardLoanSub').textContent = `${totalInstallments} cuotas programadas`;
+            document.getElementById('cardTotalPaid').textContent = formatMoney(totalPaidAmount);
+            document.getElementById('cardPaidCount').textContent = `${paidCount} cuotas abonadas`;
+            document.getElementById('cardCapitalRemaining').textContent = formatMoney(capitalRemaining);
+            document.getElementById('cardCapitalPaidSub').textContent = `${formatMoney(totalPaidCapital)} pagado`;
+            document.getElementById('cardTotalRemaining').textContent = formatMoney(totalRemaining);
+
+            renderScheduleTable(loanObj);
+        }
+
+        function openPaymentModal(index) {
+            const loanObj = getCurrentLoanObj();
+            const row = calculatedRows[index];
+            if (!loanObj || !row) return;
+
+            if (!loanObj.paymentsInfo) loanObj.paymentsInfo = {};
+            const info = loanObj.paymentsInfo[row.cuotaNum] || {};
+
+            document.getElementById('modalCuotaIndex').value = index;
+            document.getElementById('paymentModalTitle').textContent = `Pago Cuota #${row.cuotaNum} - ${loanObj.loanName || loanObj.id}`;
+            document.getElementById('modalPaidAmount').value = info.realAmount || row.cuota.toFixed(2);
+            document.getElementById('modalPaymentDate').value = formatDateForInput(info.paymentDate || getLocalDateString());
+            document.getElementById('modalRefNumber').value = info.refNumber || '';
+            document.getElementById('modalProofPreview').textContent = info.proofName ? `📄 ${info.proofName}` : '';
+            document.getElementById('modalProofFile').value = '';
+            document.getElementById('modalViewProofButton').classList.toggle('hidden', !info.proofName);
+            document.getElementById('modalRemoveProofButton').classList.toggle('hidden', !info.proofName);
+            document.getElementById('paymentModal').classList.remove('hidden');
+        }
+
+        function closePaymentModal() { document.getElementById('paymentModal').classList.add('hidden'); }
+
+        function openPaymentProofDatabase() {
+            return new Promise((resolve, reject) => {
+                if (!window.indexedDB) {
+                    reject(new Error('IndexedDB no está disponible en este navegador.'));
+                    return;
+                }
+                const request = window.indexedDB.open(PAYMENT_PROOF_DB_NAME, 1);
+                request.onupgradeneeded = () => {
+                    const database = request.result;
+                    if (!database.objectStoreNames.contains(PAYMENT_PROOF_STORE_NAME)) {
+                        database.createObjectStore(PAYMENT_PROOF_STORE_NAME);
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error || new Error('No se pudo abrir el almacenamiento local de comprobantes.'));
+            });
+        }
+
+        async function storePaymentProof(path, file) {
+            return window.uploadFileToFirebase(path, file);
+        }
+
+        async function removePaymentProofsForLoan(loan) {
+            const payments = Object.values(loan.paymentsInfo || {});
+            const cloudPaths = payments.map(payment => payment.proofStoragePath).filter(Boolean);
+            const legacyKeys = payments.map(payment => payment.proofStorageKey).filter(Boolean);
+            await Promise.all(cloudPaths.map(path => window.deleteFileFromFirebase(path)));
+            if (legacyKeys.length === 0) return;
+
+            const database = await openPaymentProofDatabase();
+            return new Promise((resolve, reject) => {
+                const transaction = database.transaction(PAYMENT_PROOF_STORE_NAME, 'readwrite');
+                const store = transaction.objectStore(PAYMENT_PROOF_STORE_NAME);
+                legacyKeys.forEach(key => store.delete(key));
+                transaction.oncomplete = () => {
+                    database.close();
+                    resolve();
+                };
+                transaction.onerror = () => {
+                    database.close();
+                    reject(transaction.error || new Error('No se pudieron eliminar comprobantes locales antiguos.'));
+                };
+                transaction.onabort = () => {
+                    database.close();
+                    reject(transaction.error || new Error('Se canceló la eliminación de comprobantes locales antiguos.'));
+                };
+            });
+        }
+
+        async function deletePaymentProof(key) {
+            if (key.startsWith('artifacts/')) {
+                await window.deleteFileFromFirebase(key);
+                return;
+            }
+            const database = await openPaymentProofDatabase();
+            return new Promise((resolve, reject) => {
+                const transaction = database.transaction(PAYMENT_PROOF_STORE_NAME, 'readwrite');
+                transaction.objectStore(PAYMENT_PROOF_STORE_NAME).delete(key);
+                transaction.oncomplete = () => {
+                    database.close();
+                    resolve();
+                };
+                transaction.onerror = () => {
+                    database.close();
+                    reject(transaction.error || new Error('No se pudo eliminar el comprobante local antiguo.'));
+                };
+                transaction.onabort = () => {
+                    database.close();
+                    reject(transaction.error || new Error('Se canceló la eliminación del comprobante local antiguo.'));
+                };
+            });
+        }
+
+        async function loadPaymentProof(key) {
+            if (key.startsWith('artifacts/')) return window.loadFileFromFirebase(key);
+            const database = await openPaymentProofDatabase();
+            return new Promise((resolve, reject) => {
+                const transaction = database.transaction(PAYMENT_PROOF_STORE_NAME, 'readonly');
+                const request = transaction.objectStore(PAYMENT_PROOF_STORE_NAME).get(key);
+                request.onsuccess = () => resolve(request.result || null);
+                transaction.oncomplete = () => database.close();
+                transaction.onerror = () => {
+                    database.close();
+                    reject(transaction.error || new Error('No se pudo leer el comprobante guardado.'));
+                };
+                transaction.onabort = () => {
+                    database.close();
+                    reject(transaction.error || new Error('Se canceló la lectura del comprobante.'));
+                };
+            });
+        }
+
+        window.loadLegacyPaymentProof = async function(key) {
+            return loadPaymentProof(key);
+        };
+
+        /*
+         * Legacy IndexedDB records remain readable so existing receipts can be migrated
+         * to Firebase when the user signs into the same browser.
+         */
+
+        function isSupportedProofFile(file) {
+            return file.type === 'application/pdf'
+                || file.type.startsWith('image/')
+                || /\.(pdf|png|jpe?g|gif|webp|bmp)$/i.test(file.name);
+        }
+
+        function showPaymentProof(file, fileName) {
+            if (!file || !isSupportedProofFile(file)) {
+                showToast('El comprobante debe ser una imagen compatible o un archivo PDF.');
+                return;
+            }
+            closeProofViewer();
+            proofViewerObjectUrl = URL.createObjectURL(file);
+            document.getElementById('proofViewerFileName').textContent = fileName || file.name || 'Comprobante';
+            const image = document.getElementById('proofViewerImage');
+            const pdf = document.getElementById('proofViewerPdf');
+            const download = document.getElementById('proofViewerDownload');
+            const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(fileName || file.name);
+            image.classList.toggle('hidden', isPdf);
+            pdf.classList.toggle('hidden', !isPdf);
+            if (isPdf) {
+                image.removeAttribute('src');
+                pdf.src = proofViewerObjectUrl;
+            } else {
+                pdf.removeAttribute('src');
+                image.src = proofViewerObjectUrl;
+            }
+            download.href = proofViewerObjectUrl;
+            download.download = fileName || file.name || 'comprobante';
+            document.getElementById('proofViewerModal').classList.remove('hidden');
+        }
+
+        function closeProofViewer() {
+            document.getElementById('proofViewerModal').classList.add('hidden');
+            document.getElementById('proofViewerImage').removeAttribute('src');
+            document.getElementById('proofViewerPdf').removeAttribute('src');
+            document.getElementById('proofViewerDownload').removeAttribute('href');
+            if (proofViewerObjectUrl) {
+                URL.revokeObjectURL(proofViewerObjectUrl);
+                proofViewerObjectUrl = null;
+            }
+        }
+
+        async function viewPaymentProof(installmentNumber) {
+            const loanObj = getCurrentLoanObj();
+            if (!loanObj) return;
+            const index = installmentNumber === undefined
+                ? Number(document.getElementById('modalCuotaIndex').value)
+                : calculatedRows.findIndex(row => row.cuotaNum === Number(installmentNumber));
+            const row = calculatedRows[index];
+            if (!row) {
+                showToast('No se encontró la cuota asociada al comprobante.');
+                return;
+            }
+            const info = loanObj.paymentsInfo?.[row.cuotaNum];
+            const selectedFile = document.getElementById('modalProofFile').files[0];
+            if (selectedFile) {
+                showPaymentProof(selectedFile, selectedFile.name);
+                return;
+            }
+            const proofPath = info?.proofStoragePath || info?.proofStorageKey;
+            if (!proofPath) {
+                showToast(info?.proofName
+                    ? 'Este comprobante es anterior y no se guardó el archivo. Vuelva a adjuntarlo para visualizarlo.'
+                    : 'No hay un comprobante adjunto para este pago.');
+                return;
+            }
+            try {
+                const savedProof = await loadPaymentProof(proofPath);
+                const proofFile = savedProof?.file || savedProof;
+                if (!proofFile) {
+                    showToast('No se encontró el archivo guardado.');
+                    return;
+                }
+                showPaymentProof(proofFile, savedProof?.name || info.proofName);
+            } catch (error) {
+                console.error('Error al abrir comprobante de pago:', error);
+                showToast(`No se pudo abrir el comprobante: ${error.message}`);
+            }
+        }
+
+        function handleProofUpload() {
+            const fileInput = document.getElementById('modalProofFile');
+            const file = fileInput.files[0];
+            if (!file) return;
+            if (!isSupportedProofFile(file)) {
+                fileInput.value = '';
+                showToast('Seleccione una imagen compatible o un archivo PDF.');
+                return;
+            }
+            document.getElementById('modalProofPreview').textContent = `📄 ${file.name}`;
+            document.getElementById('modalViewProofButton').classList.remove('hidden');
+            document.getElementById('modalRemoveProofButton').classList.remove('hidden');
+        }
+
+        async function removePaymentProofFromPaymentModal() {
+            const loanObj = getCurrentLoanObj();
+            const index = Number.parseInt(document.getElementById('modalCuotaIndex').value, 10);
+            const row = calculatedRows[index];
+            if (!loanObj || !row) return;
+
+            const selectedFile = document.getElementById('modalProofFile').files[0];
+            const info = loanObj.paymentsInfo?.[row.cuotaNum];
+            if (!selectedFile && !info?.proofName && !info?.proofStorageKey && !info?.proofStoragePath) return;
+
+            const confirmed = await openConfirmDialog({
+                title: '¿Quitar el comprobante?',
+                message: 'Se eliminará el archivo adjunto de este pago. Los demás datos del pago se conservarán.',
+                confirmText: 'Sí, quitar comprobante',
+                danger: true
+            });
+            if (!confirmed) return;
+
+            const previousInfo = info ? { ...info } : null;
+            const proofPath = info?.proofStoragePath || info?.proofStorageKey;
+            if (info) {
+                delete info.proofName;
+                delete info.proofStorageKey;
+                delete info.proofStoragePath;
+                try {
+                    await saveToStorage();
+                } catch (error) {
+                    loanObj.paymentsInfo[row.cuotaNum] = previousInfo;
+                    try {
+                        localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+                    } catch (storageError) {
+                        console.error('Could not restore local payment metadata:', storageError);
+                    }
+                    console.error('Error al actualizar el pago sin comprobante:', error);
+                    return;
+                }
+            }
+            if (proofPath) {
+                try {
+                    await deletePaymentProof(proofPath);
+                } catch (error) {
+                    console.error('Error al eliminar el archivo de comprobante:', error);
+                    showToast(`Se quitó la referencia, pero no se pudo borrar el archivo: ${error.message}`);
+                    return;
+                }
+            }
+
+            document.getElementById('modalProofFile').value = '';
+            document.getElementById('modalProofPreview').textContent = '';
+            document.getElementById('modalViewProofButton').classList.add('hidden');
+            document.getElementById('modalRemoveProofButton').classList.add('hidden');
+            recalculateTotalsFromState();
+            showToast('Comprobante eliminado');
+        }
+
+        async function savePaymentDetails() {
+            const index = Number.parseInt(document.getElementById('modalCuotaIndex').value, 10);
+            const loanObj = getCurrentLoanObj();
+            const row = calculatedRows[index];
+            if (!loanObj || !row || Number.isNaN(index)) return;
+            const paymentDate = parseDateInput(document.getElementById('modalPaymentDate').value);
+            if (!paymentDate) {
+                showToast('Seleccione una fecha de pago válida.');
+                return;
+            }
+
+            if (!loanObj.paymentsInfo) loanObj.paymentsInfo = {};
+            const fileInput = document.getElementById('modalProofFile');
+            const hadPreviousInfo = Object.prototype.hasOwnProperty.call(loanObj.paymentsInfo, row.cuotaNum);
+            const previousInfo = loanObj.paymentsInfo[row.cuotaNum] || {};
+            const selectedFile = fileInput.files[0];
+            let uploadedProofPath = '';
+            if (selectedFile) {
+                try {
+                    uploadedProofPath = window.firebaseClientStoragePath(
+                        window.currentClientId,
+                        `loans/${loanObj.id}/payments/${row.cuotaNum}/${Date.now()}`
+                    );
+                    await storePaymentProof(uploadedProofPath, selectedFile);
+                } catch (error) {
+                    console.error('Error al guardar comprobante de pago:', error);
+                    showToast(`No se pudo guardar el comprobante: ${error.message}`);
+                    return;
+                }
+            }
+
+            const nextInfo = {
+                realAmount: parseFloat(document.getElementById('modalPaidAmount').value) || row.cuota,
+                paymentDate,
+                refNumber: document.getElementById('modalRefNumber').value,
+                proofName: selectedFile ? selectedFile.name : (previousInfo.proofName || '')
+            };
+            const proofStoragePath = uploadedProofPath || previousInfo.proofStoragePath;
+            if (proofStoragePath) nextInfo.proofStoragePath = proofStoragePath;
+            else if (previousInfo.proofStorageKey) nextInfo.proofStorageKey = previousInfo.proofStorageKey;
+            loanObj.paymentsInfo[row.cuotaNum] = nextInfo;
+
+            const previousPaidState = loanObj.customPaidState?.[row.cuotaNum];
+            const hadPreviousPaidState = Object.prototype.hasOwnProperty.call(loanObj.customPaidState || {}, row.cuotaNum);
+            const previousRowPaidState = row.isPaid;
+            row.isPaid = true;
+            if (!loanObj.customPaidState) loanObj.customPaidState = {};
+            loanObj.customPaidState[row.cuotaNum] = true;
+
+            try {
+                await saveToStorage();
+            } catch (error) {
+                if (hadPreviousInfo) loanObj.paymentsInfo[row.cuotaNum] = previousInfo;
+                else delete loanObj.paymentsInfo[row.cuotaNum];
+                if (hadPreviousPaidState) loanObj.customPaidState[row.cuotaNum] = previousPaidState;
+                else delete loanObj.customPaidState[row.cuotaNum];
+                row.isPaid = previousRowPaidState;
+                try {
+                    localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+                } catch (storageError) {
+                    console.error('Could not restore local payment state:', storageError);
+                }
+                if (uploadedProofPath) {
+                    try {
+                        await window.deleteFileFromFirebase(uploadedProofPath);
+                    } catch (cleanupError) {
+                        console.error('Could not clean up an unreferenced payment proof:', cleanupError);
+                    }
+                }
+                recalculateTotalsFromState();
+                return;
+            }
+            if (uploadedProofPath && previousInfo.proofStoragePath && previousInfo.proofStoragePath !== uploadedProofPath) {
+                try {
+                    await window.deleteFileFromFirebase(previousInfo.proofStoragePath);
+                } catch (error) {
+                    console.error('Could not remove the replaced payment proof:', error);
+                    showToast(`El pago se guardó, pero no se pudo borrar el comprobante anterior: ${error.message}`);
+                }
+            }
+            if (uploadedProofPath && previousInfo.proofStorageKey) {
+                try {
+                    await deletePaymentProof(previousInfo.proofStorageKey);
+                } catch (error) {
+                    console.error('Could not remove the legacy local payment proof:', error);
+                }
+            }
+            closePaymentModal();
+            recalculateTotalsFromState();
+        }
+
+        async function toggleRowPaid(index) {
+            const loanObj = getCurrentLoanObj();
+            if (!loanObj) return;
+            const row = calculatedRows[index];
+            if (!row) return;
+            const previousRowPaidState = row.isPaid;
+            const hadPreviousPaidState = Object.prototype.hasOwnProperty.call(loanObj.customPaidState || {}, row.cuotaNum);
+            const previousPaidState = loanObj.customPaidState?.[row.cuotaNum];
+            row.isPaid = !row.isPaid;
+            if (!loanObj.customPaidState) loanObj.customPaidState = {};
+            loanObj.customPaidState[row.cuotaNum] = row.isPaid;
+            try {
+                await saveToStorage();
+            } catch (error) {
+                row.isPaid = previousRowPaidState;
+                if (hadPreviousPaidState) loanObj.customPaidState[row.cuotaNum] = previousPaidState;
+                else delete loanObj.customPaidState[row.cuotaNum];
+                try {
+                    localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+                } catch (storageError) {
+                    console.error('Could not restore local installment status:', storageError);
+                }
+                recalculateTotalsFromState();
+                return;
+            }
+            recalculateTotalsFromState();
+        }
+
+        function renderScheduleTable(loanOverride = null) {
+            const tbody = document.getElementById('scheduleBody');
+            const mobileCardsContainer = document.getElementById('scheduleMobileCards');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            if (mobileCardsContainer) mobileCardsContainer.innerHTML = '';
+            const loanObj = loanOverride || getCurrentLoanObj();
+            const loanId = loanObj?.id || window.currentLoanId || '';
+
+            calculatedRows.forEach((row, idx) => {
+                const payInfo = loanObj?.paymentsInfo ? loanObj.paymentsInfo[row.cuotaNum] : null;
+
+                const tr = document.createElement('tr');
+                tr.className = row.isPaid ? 'bg-emerald-50/60 hover:bg-emerald-100/50' : 'hover:bg-slate-50';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center"><input type="checkbox" ${row.isPaid ? 'checked' : ''} onchange="toggleRowPaid(${idx})" class="w-5 h-5 text-emerald-600 rounded cursor-pointer"></td>
+                    <td data-loan-id class="py-3 px-4 font-semibold text-slate-800 whitespace-nowrap"></td>
+                    <td class="py-3 px-4 text-center text-slate-500">${row.cuotaNum}</td>
+                    <td class="py-3 px-4 text-slate-700">${row.fecha}</td>
+                    <td class="py-3 px-4 text-right font-semibold text-slate-900">${formatMoney(row.cuota)}</td>
+                    <td class="py-3 px-4 text-right text-slate-600">${formatMoney(row.capital)}</td>
+                    <td class="py-3 px-4 text-right text-slate-600">${formatMoney(row.interes)}</td>
+                    <td data-payment-reference class="py-3 px-4 text-center text-sm text-slate-600"></td>
+                    <td class="py-3 px-4 text-right pr-6 font-semibold text-slate-800">${formatMoney(row.saldo)}</td>
+                    <td class="py-3 px-4 text-center no-print">
+                        <button onclick="openPaymentModal(${idx})" class="text-xs bg-slate-100 hover:bg-blue-50 text-blue-700 font-bold px-3 py-1.5 rounded-lg border border-slate-200">
+                            ${row.isPaid ? 'Editar' : '+ Registrar'}
+                        </button>
+                    </td>
+                `;
+                tr.querySelector('[data-loan-id]').textContent = loanId;
+                const referenceCell = tr.querySelector('[data-payment-reference]');
+                referenceCell.textContent = payInfo?.refNumber ? `Ref: ${payInfo.refNumber}` : '-';
+                if (payInfo?.proofName) {
+                    const proofButton = document.createElement('button');
+                    proofButton.type = 'button';
+                    proofButton.className = 'ml-2 text-xs font-bold text-blue-700 underline underline-offset-2 hover:text-blue-900';
+                    proofButton.textContent = 'Ver comprobante';
+                    proofButton.onclick = () => viewPaymentProof(row.cuotaNum);
+                    referenceCell.appendChild(proofButton);
+                }
+                tbody.appendChild(tr);
+
+                if (mobileCardsContainer) {
+                    const card = document.createElement('div');
+                    card.className = `p-3.5 rounded-xl border space-y-2 ${row.isPaid ? 'bg-emerald-50/80 border-emerald-200' : 'bg-white border-slate-200'}`;
+                    card.innerHTML = `
+                        <div class="flex justify-between gap-2 text-[11px]">
+                            <span class="text-slate-500">ID préstamo</span>
+                            <code data-mobile-loan-id class="font-semibold text-slate-700"></code>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" ${row.isPaid ? 'checked' : ''} onchange="toggleRowPaid(${idx})" class="w-5 h-5 text-emerald-600 rounded cursor-pointer">
+                                <span class="font-bold text-xs text-slate-900">Cuota #${row.cuotaNum}</span>
+                                <span class="text-[10px] text-slate-500">(${row.fecha})</span>
+                            </div>
+                            <span class="text-xs font-bold ${row.isPaid ? 'text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full' : 'text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full'}">${row.isPaid ? 'PAGADO' : 'PENDIENTE'}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs border-t border-b border-slate-100 py-2">
+                            <div><span class="text-slate-400 text-[10px] block">Cuota:</span><span class="font-bold text-blue-900 text-sm">${formatMoney(row.cuota)}</span></div>
+                            <div class="text-right"><span class="text-slate-400 text-[10px] block">Saldo:</span><span class="font-bold text-slate-800 text-sm">${formatMoney(row.saldo)}</span></div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span data-mobile-reference class="min-w-0 truncate text-[11px] text-slate-500"></span>
+                            <button onclick="openPaymentModal(${idx})" class="text-xs bg-blue-600 text-white font-bold px-3 py-1.5 rounded-lg">${row.isPaid ? 'Editar Pago' : '+ Pagar'}</button>
+                        </div>
+                    `;
+                    card.querySelector('[data-mobile-loan-id]').textContent = loanId;
+                    const mobileReference = card.querySelector('[data-mobile-reference]');
+                    mobileReference.textContent = payInfo?.refNumber ? `Ref: ${payInfo.refNumber}` : '-';
+                    if (payInfo?.proofName) {
+                        const proofButton = document.createElement('button');
+                        proofButton.type = 'button';
+                        proofButton.className = 'ml-2 shrink-0 text-[11px] font-bold text-blue-700 underline underline-offset-2';
+                        proofButton.textContent = 'Ver comprobante';
+                        proofButton.onclick = () => viewPaymentProof(row.cuotaNum);
+                        mobileReference.after(proofButton);
+                    }
+                    mobileCardsContainer.appendChild(card);
+                }
+            });
+        }
+
+        function renderDashboard() {
+            let totalPortfolio = 0, totalCollected = 0, totalPendingCapital = 0, totalActiveLoans = 0;
+            const grid = document.getElementById('dashboardLoansGrid');
+            if (!grid || !window.clientsData) return;
+            grid.innerHTML = '';
+
+            window.clientsData.forEach(client => {
+                if (!client.loans) return;
+                client.loans.forEach(loan => {
+                    totalActiveLoans++;
+                    totalPortfolio += loan.loanAmount;
+
+                    let loanPaid = 0, loanCapitalPaid = 0, paidCount = 0;
+                    const paidStates = loan.customPaidState || {};
+                    const { dates: paymentDates, monthsCount: numMonths } = getLoanSchedule(loan);
+                    const totalCuotas = paymentDates.length;
+                    const cuotaVal = (loan.loanAmount + (loan.monthlyInterest * numMonths)) / Math.max(1, totalCuotas);
+                    const capVal = loan.loanAmount / Math.max(1, totalCuotas);
+                    const asOf = new Date(`${loan.asOfDate}T00:00:00`);
+
+                    paymentDates.forEach((paymentDate, index) => {
+                        const installmentNumber = index + 1;
+                        const isPaid = paidStates[installmentNumber] !== undefined
+                            ? paidStates[installmentNumber]
+                            : paymentDate <= asOf;
+                        if (!isPaid) return;
+                        paidCount++;
+                        const payInfo = loan.paymentsInfo ? loan.paymentsInfo[installmentNumber] : null;
+                        loanPaid += payInfo?.realAmount ? payInfo.realAmount : cuotaVal;
+                        loanCapitalPaid += capVal;
+                    });
+
+                    totalCollected += loanPaid;
+                    totalPendingCapital += Math.max(0, loan.loanAmount - loanCapitalPaid);
+                    const pct = totalCuotas > 0 ? Math.min(100, Math.round((paidCount / totalCuotas) * 100)) : 0;
+
+                    const card = document.createElement('div');
+                    card.className = "bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 hover:shadow-md transition cursor-pointer";
+                    card.onclick = async () => {
+                        if (!await confirmDiscardLoanEdit()) return;
+                        window.currentClientId = client.id;
+                        window.currentLoanId = loan.id;
+                        switchTab('loans');
+                        renderClientDropdown();
+                        loadCurrentLoanToForm();
+                        calculateLoan();
+                    };
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full uppercase">${loan.frequency}</span>
+                                <h4 class="font-bold text-slate-900 text-sm mt-1">${loan.loanName}</h4>
+                                <p class="text-xs text-slate-500 font-medium">${client.name}</p>
+                            </div>
+                            <span class="text-xs font-bold text-blue-600">${pct}%</span>
+                        </div>
+                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                            <div class="bg-blue-600 h-full rounded-full" style="width: ${pct}%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-slate-600 font-mono pt-1">
+                            <span>Monto: ₡${Number(loan.loanAmount).toLocaleString('es-CR')}</span>
+                            <span class="text-emerald-600 font-bold">Cobrado: ₡${Math.round(loanPaid).toLocaleString('es-CR')}</span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            });
+
+            document.getElementById('dashTotalPortfolio').textContent = formatMoney(totalPortfolio);
+            document.getElementById('dashTotalCollected').textContent = formatMoney(totalCollected);
+            document.getElementById('dashTotalPendingCapital').textContent = formatMoney(totalPendingCapital);
+            document.getElementById('dashTotalClients').textContent = window.clientsData.length;
+            document.getElementById('dashActiveLoansCount').textContent = `${totalActiveLoans} préstamos activos`;
+        }
+
+        function generatePDF() {
+            const loanObj = getCurrentLoanObj();
+            const client = window.clientsData?.find(c => c.id === window.currentClientId);
+            if (!loanObj) return;
+
+            document.getElementById('pdfLoanTitleHeader').textContent = `Préstamo: ${loanObj.loanName}`;
+            document.getElementById('pdfDate').textContent = `Fecha: ${new Intl.DateTimeFormat('es-CR').format(new Date())}`;
+            document.getElementById('pdfDebtor').textContent = loanObj.debtorName;
+            document.getElementById('pdfDebtorId').textContent = `Cédula: ${client?.idNumber || 'N/A'}`;
+            document.getElementById('pdfDebtorPhone').textContent = `Tel: ${client?.phone || 'N/A'}`;
+            document.getElementById('pdfLoanAmount').textContent = `CRC ${formatPdfAmount(loanObj.loanAmount)}`;
+            document.getElementById('pdfRate').textContent = `${Number(loanObj.monthlyInterestRate).toLocaleString('es-CR')}%`;
+            document.getElementById('pdfInterest').textContent = `CRC ${formatPdfAmount(loanObj.monthlyInterest)}`;
+            document.getElementById('pdfPeriod').textContent = `${loanObj.frequency.toUpperCase()} (${calculatedRows.length} cuotas)`;
+            document.getElementById('pdfInstallment').textContent = `CRC ${formatPdfAmount(getLoanFinancialSummary(loanObj).installmentAmount)}`;
+            document.getElementById('pdfAsOf').textContent = formatDateForInput(loanObj.asOfDate) || loanObj.asOfDate || '—';
+
+            let totalPaidAmount = 0, totalPaidCapital = 0, totalPaidInterest = 0;
+            calculatedRows.forEach(r => {
+                if (r.isPaid) {
+                    const payInfo = loanObj.paymentsInfo ? loanObj.paymentsInfo[r.cuotaNum] : null;
+                    totalPaidAmount += payInfo?.realAmount ? payInfo.realAmount : r.cuota;
+                    totalPaidCapital += r.capital;
+                    totalPaidInterest += r.interes;
+                }
+            });
+
+            const capitalRemaining = Math.max(0, loanObj.loanAmount - totalPaidCapital);
+            const totalContractDebt = calculatedRows.reduce((acc, r) => acc + r.cuota, 0);
+            const totalRemaining = Math.max(0, totalContractDebt - totalPaidAmount);
+
+            document.getElementById('pdfTotalPaid').textContent = `CRC ${formatPdfAmount(totalPaidAmount)}`;
+            document.getElementById('pdfCapitalPaid').textContent = `CRC ${formatPdfAmount(totalPaidCapital)}`;
+            document.getElementById('pdfInterestPaid').textContent = `CRC ${formatPdfAmount(totalPaidInterest)}`;
+            document.getElementById('pdfCapitalRemaining').textContent = `CRC ${formatPdfAmount(capitalRemaining)}`;
+            document.getElementById('pdfTotalRemaining').textContent = `CRC ${formatPdfAmount(totalRemaining)}`;
+
+            const pdfBody = document.getElementById('pdfTableBody');
+            pdfBody.innerHTML = '';
+            calculatedRows.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-1.5 text-center font-bold">${r.cuotaNum}</td>
+                    <td class="p-1.5">${r.fecha}</td>
+                    <td class="p-1.5 text-right font-medium">${formatPdfAmount(r.cuota)}</td>
+                    <td class="p-1.5 text-right text-slate-600">${formatPdfAmount(r.capital)}</td>
+                    <td class="p-1.5 text-right text-slate-600">${formatPdfAmount(r.interes)}</td>
+                    <td class="p-1.5 text-center font-bold ${r.isPaid ? 'text-emerald-700' : 'text-slate-400'}">${r.isPaid ? 'PAGADO' : 'PENDIENTE'}</td>
+                    <td class="p-1.5 text-right font-semibold">${formatPdfAmount(r.saldo)}</td>
+                `;
+                pdfBody.appendChild(tr);
+            });
+            document.getElementById('pdfModal').classList.remove('hidden');
+        }
+
+        function formatPdfAmount(value) {
+            return (Number(value) || 0).toLocaleString('es-CR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function closePDFModal() { document.getElementById('pdfModal').classList.add('hidden'); }
+        function downloadPDFDirect() {
+            const element = document.getElementById('pdfContent');
+            const loanObj = getCurrentLoanObj();
+            const opt = {
+                margin: [0.4, 0.4, 0.4, 0.4],
+                filename: `Estado_de_Cuenta_${(loanObj?.debtorName || 'Deudor').replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 3, useCORS: true, letterRendering: true },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait', compress: true },
+                pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.pdf-summary-table'] }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function exportToCSV() {
+            const loanObj = getCurrentLoanObj();
+            if (!loanObj) return;
+            let csvContent = "data:text/csv;charset=utf-8,Cuota #,Fecha,Cuota,Capital,Interes,Estado,Saldo\n";
+            calculatedRows.forEach(r => {
+                csvContent += `${r.cuotaNum},"${r.fecha}",${r.cuota.toFixed(2)},${r.capital.toFixed(2)},${r.interes.toFixed(2)},"${r.isPaid ? 'PAGADO' : 'PENDIENTE'}",${r.saldo.toFixed(2)}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Amortizacion_${loanObj.debtorName.replace(/\s+/g, '_')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportBackupJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.clientsData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `Copia_Seguridad_Cartera_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            document.body.removeChild(downloadAnchor);
+        }
+    </script>
+</body>
+</html>
