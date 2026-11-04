@@ -2,6 +2,14 @@
 
 CrediControl is a static web application hosted on Vercel. Client and loan records use Cloud Firestore, account access and password recovery use Firebase Authentication, and private receipts/documents are stored in Cloudflare R2 through an authenticated Cloudflare Worker.
 
+## Loan payment options
+
+When creating or editing a loan, choose whether to enter the monthly interest as a percentage or as a fixed currency amount. Loans can use **Capital + interest** (the existing equal-principal plan) or **Interest only**, which charges interest on each due date and collects the remaining principal with the final installment. Older loans without a saved mode keep the existing capital-and-interest behavior.
+
+Use **Abono a capital** to record an extraordinary principal payment separately from regular installments. After each abono, either recalculate future interest and keep the regular installment amount to shorten the payoff schedule, or preserve the planned dates and interest and adjust principal against the remaining balance. For interest-only loans, recalculation updates future interest on the reduced balance while keeping the final due date.
+
+The dashboard can be filtered by client and month to compare scheduled installments with payments received across that client's loans. **Informe consolidado** opens a printable/downloadable debt summary with per-loan and portfolio totals. Dashboard amounts can be hidden for privacy, and loan cards can be collapsed individually or all at once.
+
 ## Deploy the site to Vercel
 
 1. Import this GitHub repository into Vercel.

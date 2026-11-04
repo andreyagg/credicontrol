@@ -15,6 +15,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Librería html2pdf.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -29,6 +30,10 @@
         #pdfContent .pdf-details-table td { padding: 0.45rem 0.5rem; }
         #pdfTableBody tr { break-inside: avoid; page-break-inside: avoid; }
         #pdfTableBody td { white-space: nowrap; }
+        #consolidatedReportContent { font-size: 13px; line-height: 1.5; }
+        #consolidatedReportTable { border-collapse: collapse; }
+        #consolidatedReportTable tr { break-inside: avoid; page-break-inside: avoid; }
+        body.dashboard-private .dashboard-amount { filter: blur(8px); user-select: none; }
         @media print {
             #pdfContent { padding: 12mm !important; color: #0f172a !important; font-size: 12px !important; }
             #pdfContent table { border-collapse: collapse !important; }
@@ -37,13 +42,18 @@
             #pdfContent .pdf-summary-table td,
             #pdfContent .pdf-details-table th,
             #pdfContent .pdf-details-table td { border: 1px solid #cbd5e1 !important; }
+            #consolidatedReportContent { padding: 12mm !important; color: #0f172a !important; font-size: 11px !important; }
+            #consolidatedReportContent .dashboard-amount { filter: none !important; }
+            #consolidatedReportTable th, #consolidatedReportTable td { border: 1px solid #cbd5e1 !important; }
+            #consolidatedReportMobile { display: none !important; }
         }
         @media print {
             .no-print, #mainContainer, #mobileBottomNav, #desktopSidebar { display: none !important; }
-            #pdfModal { 
+            #pdfModal.hidden, #consolidatedReportModal.hidden { display: none !important; }
+            #pdfModal:not(.hidden), #consolidatedReportModal:not(.hidden) {
                 position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: auto !important; background: white !important; padding: 0 !important; display: block !important;
             }
-            #pdfModal > div { box-shadow: none !important; max-width: 100% !important; margin: 0 !important; }
+            #pdfModal:not(.hidden) > div, #consolidatedReportModal:not(.hidden) > div { box-shadow: none !important; max-width: 100% !important; margin: 0 !important; }
             .print-only { display: block !important; }
             body { background: white !important; color: black !important; }
         }
@@ -182,20 +192,20 @@
 
         <!-- ==================== MÓDULO 1: DASHBOARD GENERAL ==================== -->
         <div id="module-dashboard" class="space-y-6">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div id="dashboardSummaryCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
                     <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total Cartera Prestada</span>
-                    <div class="text-2xl font-bold text-slate-900" id="dashTotalPortfolio">₡0.00</div>
+                    <div class="dashboard-amount text-2xl font-bold text-slate-900" id="dashTotalPortfolio">₡0.00</div>
                     <span class="text-xs text-blue-600 font-semibold" id="dashActiveLoansCount">0 préstamos activos</span>
                 </div>
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
                     <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total Recaudado</span>
-                    <div class="text-2xl font-bold text-emerald-600" id="dashTotalCollected">₡0.00</div>
+                    <div class="dashboard-amount text-2xl font-bold text-emerald-600" id="dashTotalCollected">₡0.00</div>
                     <span class="text-xs text-slate-500">Abonos a capital e intereses</span>
                 </div>
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
                     <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Saldo Capital por Cobrar</span>
-                    <div class="text-2xl font-bold text-amber-600" id="dashTotalPendingCapital">₡0.00</div>
+                    <div class="dashboard-amount text-2xl font-bold text-amber-600" id="dashTotalPendingCapital">₡0.00</div>
                     <span class="text-xs text-slate-500">Capital insoluto activo</span>
                 </div>
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
@@ -203,19 +213,43 @@
                     <div class="text-2xl font-bold text-blue-600" id="dashTotalClients">0</div>
                     <span class="text-xs text-slate-500">Expedientes activos</span>
                 </div>
+                <div class="bg-white p-5 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white shadow-sm">
+                    <span class="text-xs font-semibold text-indigo-500 uppercase tracking-wider block mb-1">Cuotas programadas del mes</span>
+                    <div class="dashboard-amount text-xl font-extrabold text-indigo-800" id="dashMonthlyDue">₡0.00</div>
+                    <span class="text-xs text-indigo-600" id="dashSelectedMonthLabel">Mes seleccionado</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white shadow-sm">
+                    <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wider block mb-1">Cobrado en el mes</span>
+                    <div class="dashboard-amount text-xl font-extrabold text-emerald-800" id="dashMonthlyCollected">₡0.00</div>
+                    <span class="text-xs text-emerald-600">Incluye abonos extraordinarios</span>
+                </div>
             </div>
 
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <div>
                         <h2 class="text-lg font-bold text-slate-900">Resumen de Préstamos Activos</h2>
-                        <p class="text-xs text-slate-500">Avance y estado actual de cada operación de crédito</p>
+                        <p class="text-xs text-slate-500">Filtre por cliente y mes para revisar cuotas, cobros y saldos consolidados</p>
                     </div>
-                    <button onclick="openNewLoanModal()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow transition">
-                        + Registrar Nuevo Préstamo
-                    </button>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:items-end">
+                        <div>
+                            <label for="dashboardClientFilter" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Cliente</label>
+                            <select id="dashboardClientFilter" onchange="renderDashboard()" class="w-full min-w-48 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"></select>
+                        </div>
+                        <div>
+                            <label for="dashboardMonthFilter" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Mes del informe</label>
+                            <input id="dashboardMonthFilter" type="month" onchange="renderDashboard()" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                        </div>
+                        <button onclick="generateConsolidatedDebtReport()" class="rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-white shadow transition hover:bg-slate-900">Informe consolidado</button>
+                        <button id="dashboardPrivacyToggle" type="button" onclick="toggleDashboardAmounts()" aria-pressed="false" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
+                            <span id="dashboardPrivacyIcon" aria-hidden="true">◉</span><span id="dashboardPrivacyLabel">Ocultar montos</span>
+                        </button>
+                        <button id="dashboardCollapseToggle" type="button" onclick="toggleAllDashboardCards()" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">Colapsar tarjetas</button>
+                        <button onclick="openNewLoanModal()" class="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow transition hover:bg-blue-700">+ Registrar Préstamo</button>
+                    </div>
                 </div>
-                <div id="dashboardLoansGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                <div id="dashboardFilterSummary" class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"></div>
+                <div id="dashboardLoansGrid" class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"></div>
             </div>
         </div>
 
@@ -353,12 +387,26 @@
                         <input type="number" id="loanAmount" disabled onchange="onAmountChange()" step="5000" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100">
                     </div>
                     <div>
+                        <label for="interestInputMode" class="block font-semibold text-slate-600 uppercase mb-1">Ingresar interés por</label>
+                        <select id="interestInputMode" disabled onchange="onInterestInputModeChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                            <option value="rate">Tasa mensual (%)</option>
+                            <option value="amount">Monto mensual (₡)</option>
+                        </select>
+                    </div>
+                    <div>
                         <label class="block font-semibold text-slate-600 uppercase mb-1">Tasa Interés Mensual (%)</label>
                         <input type="number" id="monthlyInterestRate" disabled onchange="onRateChange()" step="0.001" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-600 uppercase mb-1">Interés Mensual (₡)</label>
                         <input type="number" id="monthlyInterest" disabled step="100" onchange="onMonthlyInterestChange()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                    </div>
+                    <div>
+                        <label for="repaymentMode" class="block font-semibold text-slate-600 uppercase mb-1">Modalidad de pago</label>
+                        <select id="repaymentMode" disabled onchange="previewLoanChanges()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm disabled:cursor-not-allowed disabled:bg-slate-100">
+                            <option value="principal_interest">Capital + intereses</option>
+                            <option value="interest_only">Solo intereses; capital en última cuota</option>
+                        </select>
                     </div>
                     <div>
                         <label for="startDate" class="block font-semibold text-slate-600 uppercase mb-1">Fecha Inicio</label>
@@ -468,7 +516,10 @@
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="p-4 sm:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <h3 class="text-sm font-bold text-slate-900 uppercase">Tabla de Amortización & Control de Pagos</h3>
-                    <span class="text-xs text-slate-500">Marque las casillas para actualizar cobros</span>
+                    <div class="flex items-center gap-3">
+                        <span class="hidden sm:inline text-xs text-slate-500">Marque las casillas para actualizar cobros</span>
+                        <button onclick="openExtraPaymentModal()" class="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-200">+ Abono a capital</button>
+                    </div>
                 </div>
 
                 <!-- Versión Móvil de Cards -->
@@ -493,6 +544,10 @@
                         </thead>
                         <tbody id="scheduleBody" class="divide-y divide-slate-100 font-sans text-sm tabular-nums"></tbody>
                     </table>
+                </div>
+                <div id="extraPaymentsPanel" class="hidden border-t border-slate-100 p-4 sm:p-5">
+                    <h4 class="mb-3 text-xs font-bold uppercase tracking-wide text-slate-600">Abonos extraordinarios a capital</h4>
+                    <div id="extraPaymentsList" class="space-y-2"></div>
                 </div>
             </div>
         </div>
@@ -538,12 +593,26 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Ingresar interés por</label>
+                    <select id="modalNewLoanInterestMode" onchange="previewNewLoan()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="rate">Tasa mensual (%)</option>
+                        <option value="amount">Monto mensual (₡)</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tasa de Interés Mensual (%)</label>
                     <input type="number" id="modalNewLoanRate" value="3.445" min="0" step="0.001" oninput="previewNewLoan()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Interés Mensual (₡)</label>
-                    <input type="number" id="modalNewLoanInterest" readonly class="w-full bg-slate-100 border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-600">
+                    <input type="number" id="modalNewLoanInterest" min="0" step="100" oninput="previewNewLoan()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-600">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Modalidad de pago</label>
+                    <select id="modalNewLoanRepaymentMode" onchange="previewNewLoan()" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500">
+                        <option value="principal_interest">Capital + intereses</option>
+                        <option value="interest_only">Solo intereses; capital en última cuota</option>
+                    </select>
                 </div>
                 <div>
                     <label for="modalNewLoanStartDate" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha de Inicio</label>
@@ -612,11 +681,45 @@
                         <strong id="modalNewLoanInterestPerInstallment" class="text-xs text-amber-700">₡0,00</strong>
                     </div>
                 </div>
-                <p class="mt-1 text-[11px] text-slate-500">La primera cuota vence después de transcurrida la periodicidad desde la fecha de inicio. El monto y la cantidad se actualizan automáticamente.</p>
+                <p id="modalNewLoanPlanHint" class="mt-1 text-[11px] text-slate-500">La primera cuota vence después de transcurrida la periodicidad desde la fecha de inicio. El monto y la cantidad se actualizan automáticamente.</p>
             </div>
             <div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button onclick="closeNewLoanModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancelar</button>
                 <button onclick="saveNewLoanFromModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow">Crear Préstamo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="extraPaymentModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] overflow-y-auto p-4 flex justify-center items-center">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Abono extraordinario a capital</h3>
+                <button onclick="closeExtraPaymentModal()" class="text-slate-400 hover:text-slate-600 text-lg" aria-label="Cerrar">✕</button>
+            </div>
+            <p class="text-xs text-slate-500">Este pago reduce directamente el capital pendiente y no reemplaza una cuota ordinaria.</p>
+            <div>
+                <label for="extraPaymentAmount" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Monto del abono (₡)</label>
+                <input type="number" id="extraPaymentAmount" min="0.01" step="100" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label for="extraPaymentDate" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha del abono</label>
+                <input type="date" id="extraPaymentDate" lang="es-CR" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label for="extraPaymentReference" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Referencia (opcional)</label>
+                <input type="text" id="extraPaymentReference" maxlength="120" placeholder="Ej: SINPE o recibo" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label for="extraPaymentRecalculate" class="block text-xs font-semibold text-slate-600 uppercase mb-1">Tabla de pagos futura</label>
+                <select id="extraPaymentRecalculate" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
+                    <option value="yes">Recalcular intereses y reducir cuotas; conservar cuota periódica</option>
+                    <option value="no">Mantener plan y fechas; ajustar el capital de la última cuota</option>
+                </select>
+                <p id="extraPaymentModeHint" class="mt-1 text-[11px] text-slate-500"></p>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeExtraPaymentModal()" class="rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">Cancelar</button>
+                <button onclick="saveExtraPayment()" class="rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-700">Guardar abono</button>
             </div>
         </div>
     </div>
@@ -681,6 +784,83 @@
         </section>
     </div>
 
+    <div id="consolidatedReportModal" class="hidden fixed inset-0 z-[70] overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm">
+        <div class="mx-auto my-6 w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div class="no-print flex flex-wrap items-center justify-between gap-3 bg-slate-800 p-4 text-white">
+                <span class="text-sm font-bold">Informe consolidado de deudas</span>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="downloadConsolidatedReport()" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold hover:bg-emerald-700">Descargar PDF</button>
+                    <button type="button" onclick="window.print()" class="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold hover:bg-blue-700">Imprimir</button>
+                    <button type="button" onclick="closeConsolidatedReport()" class="rounded-lg bg-slate-700 px-3 py-2 text-xs hover:bg-slate-600">Cerrar</button>
+                </div>
+            </div>
+            <div id="consolidatedReportContent" class="space-y-5 bg-white p-5 text-slate-800 sm:p-8">
+                <header class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-300 pb-4">
+                    <div>
+                        <h1 class="text-xl font-black uppercase tracking-wide text-slate-900 sm:text-2xl">Resumen consolidado de deudas</h1>
+                        <p id="consolidatedReportScope" class="mt-1 text-sm text-slate-600"></p>
+                    </div>
+                    <p id="consolidatedReportDate" class="text-xs font-semibold text-slate-500"></p>
+                </header>
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+                    <div class="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                        <span class="block text-[10px] font-bold uppercase text-blue-600">Cartera prestada</span>
+                        <strong id="reportPortfolio" class="dashboard-amount mt-1 block text-base text-blue-950"></strong>
+                    </div>
+                    <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                        <span class="block text-[10px] font-bold uppercase text-emerald-700">Cobrado acumulado</span>
+                        <strong id="reportCollectedTotal" class="dashboard-amount mt-1 block text-base text-emerald-950"></strong>
+                    </div>
+                    <div class="rounded-xl border border-amber-100 bg-amber-50 p-3">
+                        <span class="block text-[10px] font-bold uppercase text-amber-700">Capital pendiente</span>
+                        <strong id="reportPrincipalBalance" class="dashboard-amount mt-1 block text-base text-amber-950"></strong>
+                    </div>
+                    <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+                        <span class="block text-[10px] font-bold uppercase text-indigo-700">Cuotas del mes</span>
+                        <strong id="reportMonthlyDue" class="dashboard-amount mt-1 block text-base text-indigo-950"></strong>
+                    </div>
+                    <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                        <span class="block text-[10px] font-bold uppercase text-emerald-700">Cobrado en el mes</span>
+                        <strong id="reportMonthlyCollected" class="dashboard-amount mt-1 block text-base text-emerald-950"></strong>
+                    </div>
+                </div>
+                <div id="consolidatedReportMobile" class="space-y-3 md:hidden"></div>
+                <div class="hidden overflow-x-auto md:block">
+                    <table id="consolidatedReportTable" class="w-full min-w-[1050px] text-left text-[10px] sm:text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700">
+                                <th class="p-2">Cliente</th>
+                                <th class="p-2">Préstamo</th>
+                                <th class="p-2">Inicio / Vence</th>
+                                <th class="p-2 text-right">Monto inicial</th>
+                                <th class="p-2 text-right">Tasa</th>
+                                <th class="p-2 text-right">Cuotas del mes</th>
+                                <th class="p-2 text-right">Cobrado del mes</th>
+                                <th class="p-2 text-right">Capital pendiente</th>
+                                <th class="p-2 text-right">Deuda programada</th>
+                                <th class="p-2 text-right">Cobrado acumulado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consolidatedReportBody"></tbody>
+                        <tfoot>
+                            <tr class="bg-slate-100 font-bold text-slate-900">
+                                <td class="p-2" colspan="3">Totales</td>
+                                <td id="reportTotalPortfolio" class="dashboard-amount p-2 text-right"></td>
+                                <td class="p-2"></td>
+                                <td id="reportTotalMonthlyDue" class="dashboard-amount p-2 text-right"></td>
+                                <td id="reportTotalMonthlyCollected" class="dashboard-amount p-2 text-right"></td>
+                                <td id="reportTotalPrincipalBalance" class="dashboard-amount p-2 text-right"></td>
+                                <td id="reportTotalDebt" class="dashboard-amount p-2 text-right"></td>
+                                <td id="reportTotalCollected" class="dashboard-amount p-2 text-right"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <p class="text-[10px] text-slate-500">El capital pendiente se calcula restando capital pagado y abonos extraordinarios. La deuda programada suma las cuotas aún pendientes en el plan actual.</p>
+            </div>
+        </div>
+    </div>
+
     <!-- VISTA INFORME PDF -->
     <div id="pdfModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 overflow-y-auto p-4 flex justify-center items-start">
         <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-6">
@@ -700,6 +880,7 @@
                     <div>
                         <h1 class="text-2xl font-bold text-slate-900 uppercase tracking-wide">ESTADO DE CUENTA DE CRÉDITO</h1>
                         <p class="mt-1 text-sm text-slate-600" id="pdfLoanTitleHeader">Préstamo: --</p>
+                        <p class="text-xs text-slate-500" id="pdfLoanId">ID del préstamo: --</p>
                     </div>
                     <div class="text-right text-sm">
                         <p class="font-bold text-slate-900" id="pdfDate">Fecha: --/--/----</p>
@@ -1147,6 +1328,8 @@
         window.currentClientId = null;
         window.currentLoanId = null;
         let calculatedRows = [];
+        let dashboardCardsCollapsed = false;
+        let dashboardAmountsHidden = false;
         let isEditingLoan = false;
         let confirmDialogResolver = null;
         let confirmDialogPreviousFocus = null;
@@ -1468,9 +1651,13 @@
             }
             document.getElementById('loanName').value = loan.loanName || '';
             document.getElementById('debtorName').value = loan.debtorName || '';
-            document.getElementById('loanAmount').value = loan.loanAmount || 100000;
-            document.getElementById('monthlyInterestRate').value = loan.monthlyInterestRate || 3.445;
-            document.getElementById('monthlyInterest').value = loan.monthlyInterest || 3445;
+            const loanAmount = loan.loanAmount ?? 100000;
+            const monthlyInterestRate = loan.monthlyInterestRate ?? 3.445;
+            document.getElementById('loanAmount').value = loanAmount;
+            document.getElementById('monthlyInterestRate').value = monthlyInterestRate;
+            document.getElementById('monthlyInterest').value = loan.monthlyInterest ?? (loanAmount * monthlyInterestRate / 100);
+            document.getElementById('interestInputMode').value = loan.interestInputMode || 'rate';
+            document.getElementById('repaymentMode').value = loan.repaymentMode || 'principal_interest';
             document.getElementById('startDate').value = formatDateForInput(loan.startDate || '2026-01-16');
             document.getElementById('endDate').value = formatDateForInput(loan.endDate || '2027-01-16');
             document.getElementById('frequency').value = loan.frequency || 'quincenal';
@@ -1481,8 +1668,10 @@
         function setLoanFormEditing(editing) {
             isEditingLoan = editing;
             const hasLoan = !!getCurrentLoanObj();
-            ['loanName', 'debtorName', 'loanAmount', 'monthlyInterestRate', 'monthlyInterest', 'startDate', 'endDate', 'frequency', 'asOfDate']
+            ['loanName', 'debtorName', 'loanAmount', 'monthlyInterestRate', 'monthlyInterest', 'interestInputMode', 'repaymentMode', 'startDate', 'endDate', 'frequency', 'asOfDate']
                 .forEach(id => { document.getElementById(id).disabled = !editing || !hasLoan; });
+            document.getElementById('monthlyInterestRate').disabled = !editing || !hasLoan || document.getElementById('interestInputMode').value !== 'rate';
+            document.getElementById('monthlyInterest').disabled = !editing || !hasLoan || document.getElementById('interestInputMode').value !== 'amount';
             ['startDateCalendarButton', 'endDateCalendarButton', 'asOfDateCalendarButton']
                 .forEach(id => { document.getElementById(id).disabled = !editing || !hasLoan; });
             document.getElementById('editLoanButton').classList.toggle('hidden', editing || !hasLoan);
@@ -1508,6 +1697,8 @@
                     loanAmount: Number(document.getElementById('loanAmount').value),
                     monthlyInterestRate: Number(document.getElementById('monthlyInterestRate').value),
                     monthlyInterest: Number(document.getElementById('monthlyInterest').value),
+                    interestInputMode: document.getElementById('interestInputMode').value,
+                    repaymentMode: document.getElementById('repaymentMode').value,
                     startDate: parseDateInput(document.getElementById('startDate').value) || '',
                     endDate: parseDateInput(document.getElementById('endDate').value) || '',
                     frequency: document.getElementById('frequency').value,
@@ -1636,6 +1827,9 @@
             document.getElementById('modalNewLoanName').value = `Prestamo-${client.name.replace(/\s+/g, '')}`;
             document.getElementById('modalNewLoanAmount').value = '100000';
             document.getElementById('modalNewLoanRate').value = '3.445';
+            document.getElementById('modalNewLoanInterestMode').value = 'rate';
+            document.getElementById('modalNewLoanRepaymentMode').value = 'principal_interest';
+            document.getElementById('modalNewLoanInterest').value = '';
             document.getElementById('modalNewLoanStartDate').value = formatDateForInput(today);
             document.getElementById('modalNewLoanEndDate').value = formatDateForInput(getLocalDateString(endDate));
             document.getElementById('modalNewLoanFrequency').value = 'quincenal';
@@ -1710,6 +1904,7 @@
             const installmentCount = dates.length;
             const totalCapital = Number(loan.loanAmount) || 0;
             const totalInterest = (Number(loan.monthlyInterest) || 0) * monthsCount;
+            const interestOnly = loan.repaymentMode === 'interest_only';
             const totalRepayment = totalCapital + totalInterest;
             return {
                 dates,
@@ -1718,29 +1913,47 @@
                 totalCapital,
                 totalInterest,
                 totalRepayment,
-                capitalPerInstallment: installmentCount ? totalCapital / installmentCount : 0,
+                capitalPerInstallment: installmentCount ? (interestOnly ? 0 : totalCapital / installmentCount) : 0,
                 interestPerInstallment: installmentCount ? totalInterest / installmentCount : 0,
-                installmentAmount: installmentCount ? totalRepayment / installmentCount : 0
+                installmentAmount: installmentCount ? (interestOnly ? totalInterest / installmentCount : totalRepayment / installmentCount) : 0
             };
         }
 
         function previewNewLoan() {
             const amount = Number(document.getElementById('modalNewLoanAmount').value);
-            const rate = Number(document.getElementById('modalNewLoanRate').value);
-            const monthlyInterest = Number.isFinite(amount) && Number.isFinite(rate) ? amount * rate / 100 : 0;
-            document.getElementById('modalNewLoanInterest').value = monthlyInterest.toFixed(2);
+            const interestMode = document.getElementById('modalNewLoanInterestMode').value;
+            const rateInput = document.getElementById('modalNewLoanRate');
+            const interestInput = document.getElementById('modalNewLoanInterest');
+            let rate = Number(rateInput.value);
+            let monthlyInterest = Number(interestInput.value);
+            if (interestMode === 'rate') {
+                monthlyInterest = Number.isFinite(amount) && Number.isFinite(rate) ? amount * rate / 100 : 0;
+                interestInput.value = monthlyInterest.toFixed(2);
+                interestInput.readOnly = true;
+                interestInput.classList.add('bg-slate-100');
+                rateInput.readOnly = false;
+            } else {
+                monthlyInterest = Number.isFinite(monthlyInterest) ? monthlyInterest : 0;
+                rate = Number.isFinite(amount) && amount > 0 ? monthlyInterest / amount * 100 : 0;
+                rateInput.value = rate.toFixed(3);
+                rateInput.readOnly = true;
+                interestInput.readOnly = false;
+                interestInput.classList.remove('bg-slate-100');
+            }
+            rateInput.classList.toggle('bg-slate-100', interestMode === 'amount');
 
             const loan = {
                 startDate: parseDateInput(document.getElementById('modalNewLoanStartDate').value) || '',
                 endDate: parseDateInput(document.getElementById('modalNewLoanEndDate').value) || '',
-                frequency: document.getElementById('modalNewLoanFrequency').value
+                frequency: document.getElementById('modalNewLoanFrequency').value,
+                repaymentMode: document.getElementById('modalNewLoanRepaymentMode').value
             };
             const validAmount = Number.isFinite(amount) && amount > 0;
-            const validRate = Number.isFinite(rate) && rate >= 0;
+            const validInterest = Number.isFinite(monthlyInterest) && monthlyInterest >= 0;
             const countElement = document.getElementById('modalNewLoanInstallmentCount');
             const amountElement = document.getElementById('modalNewLoanInstallmentAmount');
             const summary = getLoanFinancialSummary({ ...loan, loanAmount: amount, monthlyInterest });
-            if (!validAmount || !validRate || summary.installmentCount === 0) {
+            if (!validAmount || !validInterest || summary.installmentCount === 0) {
                 countElement.textContent = 'Revise el monto y las fechas';
                 amountElement.textContent = 'Cuota: —';
                 ['modalNewLoanTotalCapital', 'modalNewLoanTotalInterest', 'modalNewLoanTotalRepayment', 'modalNewLoanCapitalPerInstallment', 'modalNewLoanInterestPerInstallment']
@@ -1749,7 +1962,11 @@
             }
 
             countElement.textContent = `${summary.installmentCount} cuotas programadas`;
-            amountElement.textContent = `Cuota: ${formatMoney(summary.installmentAmount)}`;
+            const interestOnly = loan.repaymentMode === 'interest_only';
+            amountElement.textContent = `${interestOnly ? 'Interés por cuota' : 'Cuota'}: ${formatMoney(summary.installmentAmount)}`;
+            document.getElementById('modalNewLoanPlanHint').textContent = interestOnly
+                ? 'Se cobran intereses en cada vencimiento y el capital pendiente se incluye en la última cuota.'
+                : 'La primera cuota vence después de transcurrida la periodicidad desde la fecha de inicio. El monto y la cantidad se actualizan automáticamente.';
             document.getElementById('modalNewLoanTotalCapital').textContent = formatMoney(summary.totalCapital);
             document.getElementById('modalNewLoanTotalInterest').textContent = formatMoney(summary.totalInterest);
             document.getElementById('modalNewLoanTotalRepayment').textContent = formatMoney(summary.totalRepayment);
@@ -1767,14 +1984,18 @@
             const name = document.getElementById('modalNewLoanName').value.trim();
             const amount = Number(document.getElementById('modalNewLoanAmount').value);
             const monthlyInterestRate = Number(document.getElementById('modalNewLoanRate').value);
+            const monthlyInterest = Number(document.getElementById('modalNewLoanInterest').value);
+            const interestInputMode = document.getElementById('modalNewLoanInterestMode').value;
+            const repaymentMode = document.getElementById('modalNewLoanRepaymentMode').value;
             const startDate = parseDateInput(document.getElementById('modalNewLoanStartDate').value);
             const endDate = parseDateInput(document.getElementById('modalNewLoanEndDate').value);
             const asOfDate = parseDateInput(document.getElementById('modalNewLoanAsOfDate').value);
             const frequency = document.getElementById('modalNewLoanFrequency').value;
             const { dates } = getLoanSchedule({ startDate, endDate, frequency });
             if (!name) { showToast('Ingrese un nombre para el préstamo'); return; }
-            if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(monthlyInterestRate) || monthlyInterestRate < 0) {
-                showToast('Ingrese un monto y una tasa de interés válidos');
+            if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(monthlyInterestRate) || monthlyInterestRate < 0 ||
+                !Number.isFinite(monthlyInterest) || monthlyInterest < 0) {
+                showToast('Ingrese un monto e interés válidos');
                 return;
             }
             if (!startDate || !endDate || !asOfDate || dates.length === 0) {
@@ -1785,9 +2006,9 @@
             const newLoanId = 'l_' + Date.now();
             const newLoan = {
                 id: newLoanId, loanName: name, debtorName: client.name, loanAmount: amount,
-                monthlyInterestRate, monthlyInterest: amount * monthlyInterestRate / 100,
+                monthlyInterestRate, monthlyInterest, interestInputMode, repaymentMode,
                 startDate, endDate, frequency, asOfDate,
-                customPaidState: {}, paymentsInfo: {}
+                customPaidState: {}, paymentsInfo: {}, extraPayments: []
             };
 
             client.loans.push(newLoan);
@@ -1959,6 +2180,8 @@
             const loanAmount = Number(document.getElementById('loanAmount').value);
             const monthlyInterestRate = Number(document.getElementById('monthlyInterestRate').value);
             const monthlyInterest = Number(document.getElementById('monthlyInterest').value);
+            const interestInputMode = document.getElementById('interestInputMode').value;
+            const repaymentMode = document.getElementById('repaymentMode').value;
             const startDate = parseDateInput(document.getElementById('startDate').value);
             const endDate = parseDateInput(document.getElementById('endDate').value);
             const asOfDate = parseDateInput(document.getElementById('asOfDate').value);
@@ -1973,11 +2196,20 @@
                 showToast('Seleccione fechas válidas y verifique su orden.');
                 return;
             }
+            const alreadyAppliedCapital = buildLoanRows(loan).reduce((total, row) =>
+                total + (row.isPaid ? row.capital : 0), 0) +
+                (loan.extraPayments || []).reduce((total, payment) => total + (Number(payment.amount) || 0), 0);
+            if (loanAmount + 0.005 < alreadyAppliedCapital) {
+                showToast(`El monto original no puede ser menor que el capital ya pagado (${formatMoney(alreadyAppliedCapital)}).`);
+                return;
+            }
             loan.loanName = loanName;
             loan.debtorName = debtorName;
             loan.loanAmount = loanAmount;
             loan.monthlyInterestRate = monthlyInterestRate;
             loan.monthlyInterest = monthlyInterest;
+            loan.interestInputMode = interestInputMode;
+            loan.repaymentMode = repaymentMode;
             loan.startDate = startDate;
             loan.endDate = endDate;
             loan.frequency = document.getElementById('frequency').value;
@@ -1999,8 +2231,13 @@
 
         function onAmountChange() {
             const amount = parseFloat(document.getElementById('loanAmount').value) || 0;
-            const rate = parseFloat(document.getElementById('monthlyInterestRate').value) || 0;
-            document.getElementById('monthlyInterest').value = ((amount * rate) / 100).toFixed(2);
+            if (document.getElementById('interestInputMode').value === 'rate') {
+                const rate = parseFloat(document.getElementById('monthlyInterestRate').value) || 0;
+                document.getElementById('monthlyInterest').value = ((amount * rate) / 100).toFixed(2);
+            } else {
+                const interest = parseFloat(document.getElementById('monthlyInterest').value) || 0;
+                document.getElementById('monthlyInterestRate').value = amount > 0 ? ((interest / amount) * 100).toFixed(3) : '0';
+            }
             previewLoanChanges();
         }
 
@@ -2010,6 +2247,14 @@
             if (amount > 0) {
                 document.getElementById('monthlyInterestRate').value = ((monthlyInterest / amount) * 100).toFixed(3);
             }
+            previewLoanChanges();
+        }
+
+        function onInterestInputModeChange() {
+            const mode = document.getElementById('interestInputMode').value;
+            const editing = isEditingLoan && !!getCurrentLoanObj();
+            document.getElementById('monthlyInterestRate').disabled = !editing || mode !== 'rate';
+            document.getElementById('monthlyInterest').disabled = !editing || mode !== 'amount';
             previewLoanChanges();
         }
 
@@ -2049,6 +2294,92 @@
             return { dates, monthsCount };
         }
 
+        function buildLoanRows(loanObj) {
+            const summary = getLoanFinancialSummary(loanObj);
+            const asOf = new Date(`${loanObj.asOfDate}T00:00:00`);
+            const extras = (loanObj.extraPayments || [])
+                .filter(payment => Number(payment.amount) > 0 && parseDateInput(payment.date))
+                .slice()
+                .sort((a, b) => a.date.localeCompare(b.date));
+            const interestOnly = loanObj.repaymentMode === 'interest_only';
+            const monthlyRate = Number(loanObj.monthlyInterestRate) ||
+                (Number(loanObj.loanAmount) > 0 ? Number(loanObj.monthlyInterest) / Number(loanObj.loanAmount) * 100 : 0);
+            const calendarDaysBetween = (from, to) => (
+                Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) -
+                Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())
+            ) / 86400000;
+            const rows = [];
+            let balance = summary.totalCapital;
+            let extraIndex = 0;
+            let recalculating = false;
+            let accruedInterest = 0;
+            let accrualDate = new Date(`${loanObj.startDate}T00:00:00`);
+
+            for (let index = 0; index < summary.dates.length; index++) {
+                const dueDate = summary.dates[index];
+                while (extraIndex < extras.length && extras[extraIndex].date <= getLocalDateString(dueDate)) {
+                    const extra = extras[extraIndex++];
+                    const extraDate = new Date(`${extra.date}T00:00:00`);
+                    const elapsedDays = Math.max(0, calendarDaysBetween(accrualDate, extraDate));
+                    accruedInterest += balance * monthlyRate / 100 * elapsedDays / 30.4375;
+                    balance = Math.max(0, balance - Number(extra.amount));
+                    if (extra.recalculateSchedule) recalculating = true;
+                    accrualDate = extraDate;
+                }
+
+                if (recalculating && balance <= 0.005 && !interestOnly) break;
+
+                let capital;
+                let interest;
+                if (recalculating) {
+                    const intervalDays = Math.max(0, calendarDaysBetween(accrualDate, dueDate));
+                    interest = accruedInterest + balance * monthlyRate / 100 * intervalDays / 30.4375;
+                    accruedInterest = 0;
+                    if (interestOnly) {
+                        capital = index === summary.dates.length - 1 ? balance : 0;
+                    } else {
+                        capital = Math.min(balance, Math.max(0, summary.installmentAmount - interest));
+                        if (index === summary.dates.length - 1) capital = balance;
+                    }
+                } else {
+                    interest = summary.interestPerInstallment;
+                    accruedInterest = 0;
+                    capital = interestOnly
+                        ? (index === summary.dates.length - 1 ? balance : 0)
+                        : Math.min(balance, summary.capitalPerInstallment);
+                    if (index === summary.dates.length - 1) capital = balance;
+                }
+
+                capital = Math.max(0, Math.min(balance, capital));
+                const installment = capital + interest;
+                balance = Math.max(0, balance - capital);
+                const formattedDate = `${String(dueDate.getDate()).padStart(2, '0')}/${String(dueDate.getMonth() + 1).padStart(2, '0')}/${dueDate.getFullYear()}`;
+                const installmentNumber = index + 1;
+                const defaultPaid = dueDate <= asOf;
+                const isPaid = loanObj.customPaidState && loanObj.customPaidState[installmentNumber] !== undefined
+                    ? loanObj.customPaidState[installmentNumber]
+                    : defaultPaid;
+
+                rows.push({
+                    cuotaNum: installmentNumber,
+                    fecha: formattedDate,
+                    cuota: installment,
+                    capital,
+                    interes: interest,
+                    saldo: balance,
+                    isPaid
+                });
+                accrualDate = dueDate;
+                if (recalculating && balance <= 0.005 && !interestOnly) break;
+            }
+
+            while (extraIndex < extras.length) {
+                balance = Math.max(0, balance - Number(extras[extraIndex++].amount));
+            }
+            if (rows.length && extraIndex > 0) rows[rows.length - 1].saldo = balance;
+            return rows;
+        }
+
         function calculateLoan(loanOverride = null) {
             const loanObj = loanOverride || getCurrentLoanObj();
             if (!loanObj) {
@@ -2071,12 +2402,13 @@
                 document.getElementById('cardCapitalPaidSub').textContent = `${formatMoney(0)} pagado`;
                 document.getElementById('cardTotalRemaining').textContent = formatMoney(0);
                 renderScheduleTable();
+                renderExtraPayments({ extraPayments: [] });
                 return;
             }
 
-            const asOf = new Date(loanObj.asOfDate + 'T00:00:00');
             const summary = getLoanFinancialSummary(loanObj);
-            const { dates: paymentDates, installmentCount: totalInstallments } = summary;
+            calculatedRows = buildLoanRows(loanObj);
+            const totalInstallments = calculatedRows.length;
             if (totalInstallments === 0) {
                 calculatedRows = [];
                 document.getElementById('calculatedInstallment').textContent = formatMoney(0);
@@ -2088,32 +2420,18 @@
                 recalculateTotalsFromState(loanObj);
                 return;
             }
+            const totalInterest = calculatedRows.reduce((total, row) => total + row.interes, 0);
+            const extraPrincipal = (loanObj.extraPayments || []).reduce((total, payment) => total + (Number(payment.amount) || 0), 0);
+            const totalRepayment = calculatedRows.reduce((total, row) => total + row.cuota, 0) + extraPrincipal;
+            const totalScheduledCapital = calculatedRows.reduce((total, row) => total + row.capital, 0);
             document.getElementById('loanTotalCapital').textContent = formatMoney(summary.totalCapital);
-            document.getElementById('loanTotalInterest').textContent = formatMoney(summary.totalInterest);
-            document.getElementById('loanTotalRepayment').textContent = formatMoney(summary.totalRepayment);
-            document.getElementById('loanCapitalPerInstallment').textContent = formatMoney(summary.capitalPerInstallment);
-            document.getElementById('loanInterestPerInstallment').textContent = formatMoney(summary.interestPerInstallment);
-
-            calculatedRows = [];
-            let currentBalance = summary.totalCapital;
-
-            for (let i = 1; i <= totalInstallments; i++) {
-                const currDate = paymentDates[i - 1];
-                currentBalance -= summary.capitalPerInstallment;
-                if (currentBalance < 0.01) currentBalance = 0;
-
-                const formattedDate = `${String(currDate.getDate()).padStart(2, '0')}/${String(currDate.getMonth() + 1).padStart(2, '0')}/${currDate.getFullYear()}`;
-                const defaultPaid = currDate <= asOf;
-                const isPaid = (loanObj.customPaidState && loanObj.customPaidState[i] !== undefined) ? loanObj.customPaidState[i] : defaultPaid;
-
-                calculatedRows.push({
-                    cuotaNum: i, fecha: formattedDate,
-                    cuota: summary.installmentAmount, capital: summary.capitalPerInstallment,
-                    interes: summary.interestPerInstallment, saldo: currentBalance, isPaid: isPaid
-                });
-            }
-
-            document.getElementById('calculatedInstallment').textContent = formatMoney(summary.installmentAmount);
+            document.getElementById('loanTotalInterest').textContent = formatMoney(totalInterest);
+            document.getElementById('loanTotalRepayment').textContent = formatMoney(totalRepayment);
+            document.getElementById('loanCapitalPerInstallment').textContent = formatMoney(totalInstallments ? totalScheduledCapital / totalInstallments : 0);
+            document.getElementById('loanInterestPerInstallment').textContent = formatMoney(totalInstallments ? totalInterest / totalInstallments : 0);
+            document.getElementById('calculatedInstallment').textContent = loanObj.repaymentMode === 'interest_only'
+                ? `${formatMoney(summary.installmentAmount)} · última cuota incluye capital`
+                : formatMoney(summary.installmentAmount);
             recalculateTotalsFromState(loanObj);
         }
 
@@ -2130,6 +2448,10 @@
                     totalPaidCapital += r.capital;
                 }
             });
+            const extraPayments = loanObj.extraPayments || [];
+            const totalExtraCapital = extraPayments.reduce((total, payment) => total + (Number(payment.amount) || 0), 0);
+            totalPaidAmount += totalExtraCapital;
+            totalPaidCapital += totalExtraCapital;
 
             const totalInstallments = calculatedRows.length;
             const progressPct = totalInstallments > 0 ? Math.round((paidCount / totalInstallments) * 100) : 0;
@@ -2140,8 +2462,7 @@
             document.getElementById('progressRightText').textContent = `Faltan ${totalInstallments - paidCount} cuotas`;
 
             const capitalRemaining = Math.max(0, loanObj.loanAmount - totalPaidCapital);
-            const totalContractDebt = calculatedRows.reduce((acc, r) => acc + r.cuota, 0);
-            const totalRemaining = Math.max(0, totalContractDebt - totalPaidAmount);
+            const totalRemaining = calculatedRows.reduce((total, row) => total + (row.isPaid ? 0 : row.cuota), 0);
 
             document.getElementById('cardLoanAmount').textContent = formatMoney(loanObj.loanAmount);
             document.getElementById('cardLoanSub').textContent = `${totalInstallments} cuotas programadas`;
@@ -2152,6 +2473,7 @@
             document.getElementById('cardTotalRemaining').textContent = formatMoney(totalRemaining);
 
             renderScheduleTable(loanObj);
+            renderExtraPayments(loanObj);
         }
 
         function openPaymentModal(index) {
@@ -2175,6 +2497,121 @@
         }
 
         function closePaymentModal() { document.getElementById('paymentModal').classList.add('hidden'); }
+
+        function getExtraPaymentMinimumDate(loan) {
+            let minimumDate = loan.startDate;
+            const latestPaidRow = calculatedRows
+                .filter(row => row.isPaid)
+                .reduce((latest, row) => {
+                    const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(row.fecha);
+                    const isoDate = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+                    return isoDate > latest ? isoDate : latest;
+                }, '');
+            if (latestPaidRow) {
+                const nextDay = new Date(`${latestPaidRow}T00:00:00`);
+                nextDay.setDate(nextDay.getDate() + 1);
+                minimumDate = getLocalDateString(nextDay);
+            }
+            const latestExtraDate = (loan.extraPayments || []).reduce((latest, payment) =>
+                payment.date > latest ? payment.date : latest, '');
+            return latestExtraDate > minimumDate ? latestExtraDate : minimumDate;
+        }
+
+        function openExtraPaymentModal() {
+            const loan = getCurrentLoanObj();
+            if (!loan) {
+                showToast('Seleccione un crédito antes de registrar un abono.');
+                return;
+            }
+            const minimumDate = getExtraPaymentMinimumDate(loan);
+            const today = getLocalDateString();
+            const dateInput = document.getElementById('extraPaymentDate');
+            dateInput.min = minimumDate;
+            dateInput.value = today < minimumDate ? minimumDate : today;
+            document.getElementById('extraPaymentAmount').value = '';
+            document.getElementById('extraPaymentReference').value = '';
+            document.getElementById('extraPaymentRecalculate').value = 'yes';
+            const recalculateOption = document.getElementById('extraPaymentRecalculate').options[0];
+            recalculateOption.textContent = loan.repaymentMode === 'interest_only'
+                ? 'Recalcular intereses restantes; conservar la fecha final'
+                : 'Recalcular intereses y reducir cuotas; conservar cuota periódica';
+            document.getElementById('extraPaymentModeHint').textContent = loan.repaymentMode === 'interest_only'
+                ? 'En “Solo intereses” se actualiza el interés futuro sobre el capital restante y el vencimiento se mantiene; el capital se cobra en la última cuota.'
+                : 'El recálculo mantiene el monto periódico de referencia y reduce las cuotas necesarias para cancelar el saldo.';
+            document.getElementById('extraPaymentModal').classList.remove('hidden');
+        }
+
+        function closeExtraPaymentModal() {
+            document.getElementById('extraPaymentModal').classList.add('hidden');
+        }
+
+        async function saveExtraPayment() {
+            const loan = getCurrentLoanObj();
+            if (!loan) return;
+            const amount = Number(document.getElementById('extraPaymentAmount').value);
+            const paymentDate = document.getElementById('extraPaymentDate').value;
+            const minimumDate = getExtraPaymentMinimumDate(loan);
+            const extraPayments = loan.extraPayments || [];
+            const paidScheduledCapital = calculatedRows.reduce((total, row) =>
+                total + (row.isPaid ? row.capital : 0), 0);
+            const remainingCapital = Math.max(0, loan.loanAmount - paidScheduledCapital -
+                extraPayments.reduce((total, payment) => total + (Number(payment.amount) || 0), 0));
+            if (!Number.isFinite(amount) || amount <= 0 || amount > remainingCapital + 0.005) {
+                showToast(`El abono debe ser mayor que cero y no superar el capital pendiente (${formatMoney(remainingCapital)}).`);
+                return;
+            }
+            if (!parseDateInput(paymentDate) || paymentDate < minimumDate) {
+                showToast(`La fecha debe ser igual o posterior al ${formatDateForInput(minimumDate)}.`);
+                return;
+            }
+
+            const record = {
+                id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                date: paymentDate,
+                amount,
+                reference: document.getElementById('extraPaymentReference').value.trim(),
+                recalculateSchedule: document.getElementById('extraPaymentRecalculate').value === 'yes'
+            };
+            const previousPayments = loan.extraPayments;
+            loan.extraPayments = [...extraPayments, record];
+            try {
+                await saveToStorage();
+            } catch (error) {
+                loan.extraPayments = previousPayments;
+                try {
+                    localStorage.setItem('cartera_prestamos_clients', JSON.stringify(window.clientsData));
+                } catch (storageError) {
+                    console.error('Could not restore local extra-payment state:', storageError);
+                }
+                console.error('Error al guardar abono extraordinario:', error);
+                showToast(`No se pudo guardar el abono: ${error.message}`);
+                return;
+            }
+            closeExtraPaymentModal();
+            calculateLoan();
+            renderDashboard();
+            showToast('Abono a capital guardado');
+        }
+
+        function renderExtraPayments(loan) {
+            const panel = document.getElementById('extraPaymentsPanel');
+            const list = document.getElementById('extraPaymentsList');
+            const payments = loan.extraPayments || [];
+            panel.classList.toggle('hidden', payments.length === 0);
+            list.replaceChildren();
+            payments.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(payment => {
+                const item = document.createElement('div');
+                item.className = 'flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs';
+                const detail = document.createElement('span');
+                detail.className = 'text-slate-600';
+                detail.textContent = `${formatDateForInput(payment.date)}${payment.reference ? ` · Ref: ${payment.reference}` : ''}`;
+                const amount = document.createElement('strong');
+                amount.className = 'font-bold text-amber-800';
+                amount.textContent = formatMoney(payment.amount);
+                item.append(detail, amount);
+                list.appendChild(item);
+            });
+        }
 
         function openPaymentProofDatabase() {
             return new Promise((resolve, reject) => {
@@ -2516,6 +2953,7 @@
             }
             closePaymentModal();
             recalculateTotalsFromState();
+            renderDashboard();
         }
 
         async function toggleRowPaid(index) {
@@ -2544,6 +2982,7 @@
                 return;
             }
             recalculateTotalsFromState();
+            renderDashboard();
         }
 
         function renderScheduleTable(loanOverride = null) {
@@ -2630,44 +3069,485 @@
             });
         }
 
+        function getDashboardMonthLabel(month) {
+            if (!/^\d{4}-\d{2}$/.test(month || '')) return 'Mes sin seleccionar';
+            const date = new Date(`${month}-01T12:00:00`);
+            return new Intl.DateTimeFormat('es-CR', { month: 'long', year: 'numeric' }).format(date);
+        }
+
+        function getLoanDashboardSummary(loan, month) {
+            const rows = buildLoanRows(loan);
+            let collected = 0;
+            let collectedInMonth = 0;
+            let capitalPaid = 0;
+            let scheduledInMonth = 0;
+            let remainingScheduledDebt = 0;
+            let paidCount = 0;
+
+            rows.forEach(row => {
+                const dueDate = parseDateInput(row.fecha);
+                const paymentInfo = loan.paymentsInfo?.[row.cuotaNum];
+                if (dueDate?.slice(0, 7) === month) scheduledInMonth += row.cuota;
+                if (row.isPaid) {
+                    paidCount++;
+                    const actualAmount = Number(paymentInfo?.realAmount) || row.cuota;
+                    const actualDate = parseDateInput(paymentInfo?.paymentDate) || dueDate;
+                    collected += actualAmount;
+                    capitalPaid += row.capital;
+                    if (actualDate?.slice(0, 7) === month) collectedInMonth += actualAmount;
+                } else {
+                    remainingScheduledDebt += row.cuota;
+                }
+            });
+
+            const extraPayments = loan.extraPayments || [];
+            const extraCapital = extraPayments.reduce((total, payment) => total + (Number(payment.amount) || 0), 0);
+            const extraCollectedInMonth = extraPayments.reduce((total, payment) =>
+                total + (payment.date?.slice(0, 7) === month ? Number(payment.amount) || 0 : 0), 0);
+            collected += extraCapital;
+            collectedInMonth += extraCollectedInMonth;
+            capitalPaid += extraCapital;
+            return {
+                rows,
+                paidCount,
+                collected,
+                collectedInMonth,
+                scheduledInMonth,
+                capitalBalance: Math.max(0, Number(loan.loanAmount) - capitalPaid),
+                remainingScheduledDebt,
+                monthlyRate: Number(loan.monthlyInterestRate) ||
+                    (Number(loan.loanAmount) > 0 ? Number(loan.monthlyInterest) / Number(loan.loanAmount) * 100 : 0)
+            };
+        }
+
+        function setDashboardPrivacy(hidden) {
+            dashboardAmountsHidden = hidden;
+            document.body.classList.toggle('dashboard-private', hidden);
+            const button = document.getElementById('dashboardPrivacyToggle');
+            const icon = document.getElementById('dashboardPrivacyIcon');
+            const label = document.getElementById('dashboardPrivacyLabel');
+            if (!button || !icon || !label) return;
+            button.setAttribute('aria-pressed', String(hidden));
+            button.setAttribute('aria-label', hidden ? 'Mostrar montos' : 'Ocultar montos');
+            icon.innerHTML = hidden
+                ? '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.2A10.7 10.7 0 0112 5c5 0 8.5 4.5 9.5 7-.4 1.1-1.3 2.6-2.7 3.9M6.2 6.2C3.9 7.7 2.8 10 2.5 12c.5 1.2 1.5 2.8 3.2 4.2A10 10 0 0012 19c1.1 0 2.1-.2 3-.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                : '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.7" stroke="currentColor" stroke-width="1.8"/></svg>';
+            label.textContent = hidden ? 'Mostrar montos' : 'Ocultar montos';
+        }
+
+        function toggleDashboardAmounts() {
+            setDashboardPrivacy(!dashboardAmountsHidden);
+        }
+
+        function toggleAllDashboardCards() {
+            const cards = [...document.querySelectorAll('#dashboardLoansGrid [data-loan-details]')];
+            if (!cards.length) return;
+            dashboardCardsCollapsed = cards.some(card => !card.classList.contains('hidden'));
+            cards.forEach(card => {
+                card.classList.toggle('hidden', dashboardCardsCollapsed);
+                const button = card.parentElement.querySelector('[data-card-toggle]');
+                const icon = button?.querySelector('[data-card-toggle-icon]');
+                if (!button) return;
+                button.setAttribute('aria-expanded', String(!dashboardCardsCollapsed));
+                button.setAttribute('aria-label', dashboardCardsCollapsed ? 'Expandir resumen del préstamo' : 'Colapsar resumen del préstamo');
+                if (icon) icon.classList.toggle('rotate-180', !dashboardCardsCollapsed);
+            });
+            const toggle = document.getElementById('dashboardCollapseToggle');
+            if (toggle) toggle.textContent = dashboardCardsCollapsed ? 'Expandir tarjetas' : 'Colapsar tarjetas';
+        }
+
+        function generateConsolidatedDebtReport() {
+            const clients = window.clientsData || [];
+            const selectedClientId = document.getElementById('dashboardClientFilter')?.value || 'all';
+            const month = document.getElementById('dashboardMonthFilter')?.value || getLocalDateString().slice(0, 7);
+            const selectedClients = selectedClientId === 'all'
+                ? clients
+                : clients.filter(client => client.id === selectedClientId);
+            const reportRows = [];
+            const totals = { portfolio: 0, collected: 0, principal: 0, monthlyDue: 0, monthlyCollected: 0, debt: 0 };
+
+            selectedClients.forEach(client => {
+                (client.loans || []).forEach(loan => {
+                    const summary = getLoanDashboardSummary(loan, month);
+                    const row = {
+                        clientName: client.name || 'Sin nombre',
+                        loanName: loan.loanName || loan.id || 'Préstamo',
+                        startDate: formatDateForInput(loan.startDate) || '—',
+                        endDate: formatDateForInput(loan.endDate) || '—',
+                        amount: Number(loan.loanAmount) || 0,
+                        collected: summary.collected,
+                        rate: summary.monthlyRate,
+                        monthlyDue: summary.scheduledInMonth,
+                        monthlyCollected: summary.collectedInMonth,
+                        principalBalance: summary.capitalBalance,
+                        debt: summary.remainingScheduledDebt
+                    };
+                    reportRows.push(row);
+                    totals.portfolio += row.amount;
+                    totals.collected += row.collected;
+                    totals.principal += row.principalBalance;
+                    totals.monthlyDue += row.monthlyDue;
+                    totals.monthlyCollected += row.monthlyCollected;
+                    totals.debt += row.debt;
+                });
+            });
+
+            const scope = selectedClientId === 'all'
+                ? 'Todos los clientes'
+                : selectedClients[0]?.name || 'Cliente seleccionado';
+            document.getElementById('consolidatedReportScope').textContent =
+                `${scope} · ${getDashboardMonthLabel(month)} · ${reportRows.length} préstamos`;
+            document.getElementById('consolidatedReportDate').textContent =
+                `Generado: ${new Intl.DateTimeFormat('es-CR').format(new Date())}`;
+            document.getElementById('reportPortfolio').textContent = formatMoney(totals.portfolio);
+            document.getElementById('reportCollectedTotal').textContent = formatMoney(totals.collected);
+            document.getElementById('reportPrincipalBalance').textContent = formatMoney(totals.principal);
+            document.getElementById('reportMonthlyDue').textContent = formatMoney(totals.monthlyDue);
+            document.getElementById('reportMonthlyCollected').textContent = formatMoney(totals.monthlyCollected);
+            document.getElementById('reportTotalPortfolio').textContent = formatMoney(totals.portfolio);
+            document.getElementById('reportTotalMonthlyDue').textContent = formatMoney(totals.monthlyDue);
+            document.getElementById('reportTotalMonthlyCollected').textContent = formatMoney(totals.monthlyCollected);
+            document.getElementById('reportTotalPrincipalBalance').textContent = formatMoney(totals.principal);
+            document.getElementById('reportTotalDebt').textContent = formatMoney(totals.debt);
+            document.getElementById('reportTotalCollected').textContent = formatMoney(totals.collected);
+
+            const body = document.getElementById('consolidatedReportBody');
+            const mobileReport = document.getElementById('consolidatedReportMobile');
+            body.replaceChildren();
+            mobileReport.replaceChildren();
+            if (!reportRows.length) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 10;
+                cell.className = 'p-6 text-center text-slate-500';
+                cell.textContent = 'No hay préstamos para los filtros seleccionados.';
+                row.appendChild(cell);
+                body.appendChild(row);
+                const empty = document.createElement('p');
+                empty.className = 'rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500';
+                empty.textContent = 'No hay préstamos para los filtros seleccionados.';
+                mobileReport.appendChild(empty);
+            } else {
+                reportRows.forEach(reportRow => {
+                    const row = document.createElement('tr');
+                    [
+                        reportRow.clientName,
+                        reportRow.loanName,
+                        `${reportRow.startDate} / ${reportRow.endDate}`,
+                        formatMoney(reportRow.amount),
+                        `${reportRow.rate.toLocaleString('es-CR', { maximumFractionDigits: 3 })}%`,
+                        formatMoney(reportRow.monthlyDue),
+                        formatMoney(reportRow.monthlyCollected),
+                        formatMoney(reportRow.principalBalance),
+                        formatMoney(reportRow.debt),
+                        formatMoney(reportRow.collected)
+                    ].forEach((value, index) => {
+                        const cell = document.createElement('td');
+                        cell.className = `p-2 ${index >= 3 ? 'text-right' : ''}${index >= 3 && index !== 4 ? ' dashboard-amount' : ''}`;
+                        cell.textContent = value;
+                        row.appendChild(cell);
+                    });
+                    body.appendChild(row);
+
+                    const card = document.createElement('article');
+                    card.className = 'overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm';
+                    const heading = document.createElement('div');
+                    heading.className = 'border-b border-slate-100 bg-slate-50 p-3';
+                    const loanTitle = document.createElement('h2');
+                    loanTitle.className = 'text-sm font-extrabold text-slate-900';
+                    loanTitle.textContent = reportRow.loanName;
+                    const client = document.createElement('p');
+                    client.className = 'mt-0.5 break-words text-xs font-medium text-slate-600';
+                    client.textContent = reportRow.clientName;
+                    const dates = document.createElement('p');
+                    dates.className = 'mt-1 text-[11px] text-slate-500';
+                    dates.textContent = `Inicio ${reportRow.startDate} · Vence ${reportRow.endDate}`;
+                    heading.append(loanTitle, client, dates);
+                    const details = document.createElement('dl');
+                    details.className = 'grid grid-cols-2 gap-x-3 gap-y-3 p-3';
+                    [
+                        ['Monto inicial', formatMoney(reportRow.amount), 'text-blue-800'],
+                        ['Tasa', `${reportRow.rate.toLocaleString('es-CR', { maximumFractionDigits: 3 })}%`, 'text-slate-800'],
+                        ['Capital pendiente', formatMoney(reportRow.principalBalance), 'text-amber-800'],
+                        ['Cuotas del mes', formatMoney(reportRow.monthlyDue), 'text-indigo-800'],
+                        ['Cobrado del mes', formatMoney(reportRow.monthlyCollected), 'text-emerald-800'],
+                        ['Deuda programada', formatMoney(reportRow.debt), 'text-slate-800'],
+                        ['Cobrado acumulado', formatMoney(reportRow.collected), 'text-emerald-800']
+                    ].forEach(([label, amount, amountClass]) => {
+                        const item = document.createElement('div');
+                        item.className = 'min-w-0';
+                        const term = document.createElement('dt');
+                        term.className = 'text-[10px] font-semibold leading-tight text-slate-500';
+                        term.textContent = label;
+                        const value = document.createElement('dd');
+                        value.className = `dashboard-amount mt-0.5 break-words text-xs font-bold ${amountClass}`;
+                        value.textContent = amount;
+                        item.append(term, value);
+                        details.appendChild(item);
+                    });
+                    card.append(heading, details);
+                    mobileReport.appendChild(card);
+                });
+            }
+            document.getElementById('consolidatedReportModal').classList.remove('hidden');
+        }
+
+        function closeConsolidatedReport() {
+            document.getElementById('consolidatedReportModal').classList.add('hidden');
+        }
+
+        function downloadConsolidatedReport() {
+            const JsPdf = window.jspdf?.jsPDF;
+            if (!JsPdf) {
+                showToast('No se pudo cargar el generador de PDF. Revise su conexión e inténtelo de nuevo.');
+                return;
+            }
+
+            try {
+                const month = document.getElementById('dashboardMonthFilter')?.value || getLocalDateString().slice(0, 7);
+                const clientName = document.getElementById('dashboardClientFilter')?.selectedOptions[0]?.textContent || 'Todos';
+                const scope = document.getElementById('consolidatedReportScope').textContent.trim();
+                const generatedAt = document.getElementById('consolidatedReportDate').textContent.trim();
+                const table = document.getElementById('consolidatedReportTable');
+                const headers = [...table.querySelectorAll('thead th')].map(cell => cell.textContent.trim());
+                const rows = [...table.querySelectorAll('tbody tr')]
+                    .filter(row => row.cells.length === headers.length)
+                    .map(row => [...row.cells].map(cell => cell.textContent.trim()));
+                const summary = [
+                    ['Cartera prestada', document.getElementById('reportPortfolio').textContent],
+                    ['Cobrado acumulado', document.getElementById('reportCollectedTotal').textContent],
+                    ['Capital pendiente', document.getElementById('reportPrincipalBalance').textContent],
+                    ['Cuotas del mes', document.getElementById('reportMonthlyDue').textContent],
+                    ['Cobrado en el mes', document.getElementById('reportMonthlyCollected').textContent]
+                ];
+                const parseAmount = value =>
+                    Number(String(value).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+                const formatReportAmount = value => (Number(value) || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+                const cleanPdfText = value => String(value || '').replace(/[\u00a0\u202f]/g, ' ');
+                const total = id => formatReportAmount(parseAmount(document.getElementById(id).textContent));
+                const pdf = new JsPdf({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const margin = 12;
+                const contentWidth = pageWidth - margin * 2;
+                const rowHeight = 10;
+
+                const drawPageHeader = (continued = false) => {
+                    pdf.setTextColor(15, 23, 42);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(17);
+                    pdf.text(continued ? 'RESUMEN CONSOLIDADO DE DEUDAS (continuación)' : 'RESUMEN CONSOLIDADO DE DEUDAS', margin, 15);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setFontSize(9);
+                    pdf.setTextColor(71, 85, 105);
+                    pdf.text(scope, margin, 21);
+                    pdf.setFontSize(8);
+                    pdf.text(generatedAt, pageWidth - margin, 15, { align: 'right' });
+                    pdf.setDrawColor(203, 213, 225);
+                    pdf.line(margin, 25, pageWidth - margin, 25);
+                    let y = 31;
+
+                    if (!continued) {
+                        const gap = 3;
+                        const boxWidth = (contentWidth - gap * 4) / 5;
+                        const boxHeight = 17;
+                        summary.forEach(([label, amount], index) => {
+                            const x = margin + index * (boxWidth + gap);
+                            const fills = [
+                                [239, 246, 255], [236, 253, 245], [255, 251, 235], [238, 242, 255], [236, 253, 245]
+                            ];
+                            pdf.setFillColor(...fills[index]);
+                            pdf.setDrawColor(226, 232, 240);
+                            pdf.roundedRect(x, y, boxWidth, boxHeight, 2, 2, 'FD');
+                            pdf.setFont('helvetica', 'bold');
+                            pdf.setFontSize(6.5);
+                            pdf.setTextColor(71, 85, 105);
+                            pdf.text(label.toUpperCase(), x + 3, y + 6);
+                            pdf.setFontSize(9);
+                            pdf.setTextColor(15, 23, 42);
+                            pdf.text(`CRC ${formatReportAmount(parseAmount(amount))}`, x + 3, y + 12.5);
+                        });
+                        y += boxHeight + 7;
+                    }
+                    return y;
+                };
+
+                const detailSection = {
+                    title: 'Detalle del préstamo',
+                    headers: ['Cliente', 'Préstamo', 'Inicio / vence', 'Monto inicial (CRC)', 'Tasa', 'Capital pendiente (CRC)'],
+                    widths: [55, 35, 47, 48, 23, 65],
+                    alignRight: [3, 5],
+                    rows: rows.map(row => [
+                        cleanPdfText(row[0]), cleanPdfText(row[1]), cleanPdfText(row[2]),
+                        formatReportAmount(parseAmount(row[3])), cleanPdfText(row[4]),
+                        formatReportAmount(parseAmount(row[7]))
+                    ]),
+                    totals: ['Totales', '', '', total('reportTotalPortfolio'), '', total('reportTotalPrincipalBalance')]
+                };
+                const paymentsSection = {
+                    title: 'Resumen de pagos',
+                    headers: ['Cliente / préstamo', 'Cuotas del mes (CRC)', 'Cobrado del mes (CRC)', 'Deuda programada (CRC)', 'Cobrado acumulado (CRC)'],
+                    widths: [72, 50.25, 50.25, 50.25, 50.25],
+                    alignRight: [1, 2, 3, 4],
+                    rows: rows.map(row => [
+                        `${cleanPdfText(row[0])} - ${cleanPdfText(row[1])}`,
+                        formatReportAmount(parseAmount(row[5])), formatReportAmount(parseAmount(row[6])),
+                        formatReportAmount(parseAmount(row[8])), formatReportAmount(parseAmount(row[9]))
+                    ]),
+                    totals: [
+                        'Totales', total('reportTotalMonthlyDue'), total('reportTotalMonthlyCollected'),
+                        total('reportTotalDebt'), total('reportTotalCollected')
+                    ]
+                };
+
+                let y = drawPageHeader();
+                const bottomLimit = pageHeight - margin - 10;
+                const drawSectionHeading = section => {
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(10);
+                    pdf.setTextColor(15, 23, 42);
+                    pdf.text(section.title, margin, y + 4);
+                    y += 7;
+                    pdf.setFillColor(30, 41, 59);
+                    pdf.rect(margin, y, contentWidth, rowHeight, 'F');
+                    pdf.setFontSize(7);
+                    pdf.setTextColor(255, 255, 255);
+                    let x = margin;
+                    section.headers.forEach((header, index) => {
+                        const lines = pdf.splitTextToSize(header, section.widths[index] - 4).slice(0, 2);
+                        pdf.text(lines, x + 2, y + (lines.length > 1 ? 3.5 : 6.2));
+                        x += section.widths[index];
+                    });
+                    y += rowHeight;
+                };
+                const drawSectionRow = (section, values, rowIndex, isTotal = false) => {
+                    const wrapped = values.map((value, index) =>
+                        pdf.splitTextToSize(cleanPdfText(value) || '—', section.widths[index] - 5));
+                    const lineCount = Math.max(1, ...wrapped.map(cell => cell.length));
+                    const height = Math.max(rowHeight, 5 + lineCount * 3.4);
+                    if (y + height > bottomLimit) {
+                        pdf.addPage();
+                        y = drawPageHeader(true);
+                        drawSectionHeading(section);
+                    }
+                    if (isTotal) {
+                        pdf.setFillColor(226, 232, 240);
+                    } else if (rowIndex % 2 === 1) {
+                        pdf.setFillColor(248, 250, 252);
+                    } else {
+                        pdf.setFillColor(255, 255, 255);
+                    }
+                    pdf.rect(margin, y, contentWidth, height, 'F');
+                    pdf.setDrawColor(226, 232, 240);
+                    pdf.rect(margin, y, contentWidth, height);
+                    pdf.setFont('helvetica', isTotal ? 'bold' : 'normal');
+                    pdf.setFontSize(8);
+                    pdf.setTextColor(51, 65, 85);
+                    let x = margin;
+                    wrapped.forEach((cellLines, index) => {
+                        const rightAligned = section.alignRight.includes(index);
+                        const textX = rightAligned ? x + section.widths[index] - 2.5 : x + 2.5;
+                        pdf.text(cellLines, textX, y + 4 + (lineCount > 1 ? 0 : 1), { align: rightAligned ? 'right' : 'left' });
+                        x += section.widths[index];
+                    });
+                    y += height;
+                };
+
+                [detailSection, paymentsSection].forEach(section => {
+                    if (y + 22 > bottomLimit) {
+                        pdf.addPage();
+                        y = drawPageHeader(true);
+                    }
+                    drawSectionHeading(section);
+                    section.rows.forEach((row, index) => drawSectionRow(section, row, index));
+                    if (section.rows.length) drawSectionRow(section, section.totals, section.rows.length, true);
+                    y += 7;
+                });
+
+                const pageCount = pdf.internal.getNumberOfPages();
+                for (let page = 1; page <= pageCount; page++) {
+                    pdf.setPage(page);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setFontSize(7);
+                    pdf.setTextColor(100, 116, 139);
+                    pdf.text(`Página ${page} de ${pageCount}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+                }
+
+                const safeClientName = clientName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w-]+/g, '_');
+                pdf.save(`Deudas_${safeClientName}_${month}.pdf`);
+            } catch (error) {
+                console.error('Error al generar informe PDF consolidado:', error);
+                showToast(`No se pudo generar el PDF: ${error.message}`);
+            }
+        }
+
         function renderDashboard() {
-            let totalPortfolio = 0, totalCollected = 0, totalPendingCapital = 0, totalActiveLoans = 0;
             const grid = document.getElementById('dashboardLoansGrid');
             if (!grid || !window.clientsData) return;
-            grid.innerHTML = '';
+            const clients = window.clientsData;
+            const clientFilter = document.getElementById('dashboardClientFilter');
+            const monthFilter = document.getElementById('dashboardMonthFilter');
+            if (!clientFilter || !monthFilter) return;
 
-            window.clientsData.forEach(client => {
-                if (!client.loans) return;
-                client.loans.forEach(loan => {
-                    totalActiveLoans++;
-                    totalPortfolio += loan.loanAmount;
+            const previousClientId = clientFilter.value || 'all';
+            clientFilter.replaceChildren();
+            const allClientsOption = document.createElement('option');
+            allClientsOption.value = 'all';
+            allClientsOption.textContent = 'Todos los clientes';
+            clientFilter.appendChild(allClientsOption);
+            clients.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client.id;
+                option.textContent = client.name || 'Cliente sin nombre';
+                clientFilter.appendChild(option);
+            });
+            clientFilter.value = clients.some(client => client.id === previousClientId) ? previousClientId : 'all';
+            if (!monthFilter.value) monthFilter.value = getLocalDateString().slice(0, 7);
 
-                    let loanPaid = 0, loanCapitalPaid = 0, paidCount = 0;
-                    const paidStates = loan.customPaidState || {};
-                    const { dates: paymentDates, monthsCount: numMonths } = getLoanSchedule(loan);
-                    const totalCuotas = paymentDates.length;
-                    const cuotaVal = (loan.loanAmount + (loan.monthlyInterest * numMonths)) / Math.max(1, totalCuotas);
-                    const capVal = loan.loanAmount / Math.max(1, totalCuotas);
-                    const asOf = new Date(`${loan.asOfDate}T00:00:00`);
+            const month = monthFilter.value;
+            const monthLabel = getDashboardMonthLabel(month);
+            const selectedClients = clientFilter.value === 'all'
+                ? clients
+                : clients.filter(client => client.id === clientFilter.value);
+            const reportClients = selectedClients.filter(client => client.loans?.length);
+            const clientSummaries = [];
+            const totals = { portfolio: 0, collected: 0, principal: 0, monthlyDue: 0, monthlyCollected: 0, loans: 0 };
 
-                    paymentDates.forEach((paymentDate, index) => {
-                        const installmentNumber = index + 1;
-                        const isPaid = paidStates[installmentNumber] !== undefined
-                            ? paidStates[installmentNumber]
-                            : paymentDate <= asOf;
-                        if (!isPaid) return;
-                        paidCount++;
-                        const payInfo = loan.paymentsInfo ? loan.paymentsInfo[installmentNumber] : null;
-                        loanPaid += payInfo?.realAmount ? payInfo.realAmount : cuotaVal;
-                        loanCapitalPaid += capVal;
-                    });
+            reportClients.forEach(client => {
+                const loans = client.loans.map(loan => {
+                    const summary = getLoanDashboardSummary(loan, month);
+                    totals.portfolio += Number(loan.loanAmount) || 0;
+                    totals.collected += summary.collected;
+                    totals.principal += summary.capitalBalance;
+                    totals.monthlyDue += summary.scheduledInMonth;
+                    totals.monthlyCollected += summary.collectedInMonth;
+                    totals.loans++;
+                    return { loan, summary };
+                });
+                clientSummaries.push({ client, loans });
+            });
 
-                    totalCollected += loanPaid;
-                    totalPendingCapital += Math.max(0, loan.loanAmount - loanCapitalPaid);
-                    const pct = totalCuotas > 0 ? Math.min(100, Math.round((paidCount / totalCuotas) * 100)) : 0;
+            grid.replaceChildren();
+            if (!totals.loans) {
+                const empty = document.createElement('p');
+                empty.className = 'col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500';
+                empty.textContent = clientFilter.value === 'all'
+                    ? 'Aún no hay préstamos para mostrar.'
+                    : 'Este cliente todavía no tiene préstamos registrados.';
+                grid.appendChild(empty);
+            }
 
+            clientSummaries.forEach(({ client, loans }) => {
+                loans.forEach(({ loan, summary }, loanIndex) => {
+                    const percent = summary.rows.length ? Math.min(100, Math.round(summary.paidCount / summary.rows.length * 100)) : 0;
+                    const nextInstallment = summary.rows.find(row => !row.isPaid) || summary.rows[summary.rows.length - 1];
+                    const installmentAmount = nextInstallment?.cuota ?? getLoanFinancialSummary(loan).installmentAmount;
+                    const interestOnly = loan.repaymentMode === 'interest_only';
                     const card = document.createElement('div');
-                    card.className = "bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 hover:shadow-md transition cursor-pointer";
+                    card.className = 'group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg';
                     card.onclick = async () => {
                         if (!await confirmDiscardLoanEdit()) return;
                         window.currentClientId = client.id;
@@ -2678,31 +3558,93 @@
                         calculateLoan();
                     };
                     card.innerHTML = `
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <span class="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full uppercase">${loan.frequency}</span>
-                                <h4 class="font-bold text-slate-900 text-sm mt-1">${loan.loanName}</h4>
-                                <p class="text-xs text-slate-500 font-medium">${client.name}</p>
+                        <div class="border-b border-slate-100 bg-gradient-to-r from-blue-50 via-white to-white p-3 sm:p-4 lg:p-2">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-blue-700">${loan.frequency}</span>
+                                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">${interestOnly ? 'SOLO INTERESES' : 'CAPITAL + INTERESES'}</span>
+                                    </div>
+                                    <h4 class="mt-1.5 truncate text-sm font-extrabold text-slate-900">${loan.loanName}</h4>
+                                    <p class="mt-0.5 truncate text-xs font-medium text-slate-500">${client.name}</p>
+                                </div>
+                                <div class="flex shrink-0 items-center gap-2">
+                                    <div class="rounded-xl bg-white px-3 py-2 text-right shadow-sm ring-1 ring-blue-100">
+                                        <span class="block text-[9px] font-bold uppercase tracking-wide text-slate-400">Avance</span>
+                                        <span class="text-lg font-black leading-tight text-blue-700">${percent}%</span>
+                                    </div>
+                                    <button type="button" data-card-toggle aria-expanded="${!dashboardCardsCollapsed}" aria-label="${dashboardCardsCollapsed ? 'Expandir' : 'Colapsar'} resumen del préstamo" class="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50">
+                                        <svg data-card-toggle-icon class="h-4 w-4 transition-transform ${dashboardCardsCollapsed ? '' : 'rotate-180'}" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </button>
+                                </div>
                             </div>
-                            <span class="text-xs font-bold text-blue-600">${pct}%</span>
+                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                                <div class="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all" style="width: ${percent}%"></div>
+                            </div>
                         </div>
-                        <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                            <div class="bg-blue-600 h-full rounded-full" style="width: ${pct}%"></div>
-                        </div>
-                        <div class="flex justify-between text-xs text-slate-600 font-mono pt-1">
-                            <span>Monto: ₡${Number(loan.loanAmount).toLocaleString('es-CR')}</span>
-                            <span class="text-emerald-600 font-bold">Cobrado: ₡${Math.round(loanPaid).toLocaleString('es-CR')}</span>
+                        <div data-loan-details class="grid grid-cols-2 gap-2 p-3 sm:gap-3 sm:p-4 lg:grid-cols-4 lg:gap-1.5 lg:p-2 ${dashboardCardsCollapsed ? 'hidden' : ''}">
+                            <div class="col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-2.5 lg:p-2">
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-blue-600">Monto prestado</span>
+                                <strong class="dashboard-amount mt-0.5 block break-words text-lg font-black tracking-tight text-blue-950 lg:text-base">${formatMoney(loan.loanAmount)}</strong>
+                            </div>
+                            <div class="order-2 rounded-xl border border-amber-100 bg-amber-50/80 p-2.5 lg:order-3 lg:p-2">
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700">Interés mensual</span>
+                                <strong class="mt-0.5 block text-sm font-extrabold text-amber-900">${summary.monthlyRate.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%</strong>
+                            </div>
+                            <div class="order-3 rounded-xl border border-indigo-100 bg-indigo-50/80 p-2.5 lg:order-4 lg:p-2">
+                                <span class="block text-[10px] font-bold uppercase tracking-wider text-indigo-700">${interestOnly ? 'Interés por cuota' : 'Cuota periódica'}</span>
+                                <strong class="dashboard-amount mt-0.5 block break-words text-sm font-extrabold text-indigo-900">${formatMoney(installmentAmount)}</strong>
+                                ${interestOnly ? '<span class="mt-0.5 block text-[9px] font-medium text-indigo-600">Capital incluido al final</span>' : ''}
+                            </div>
+                            <div class="order-4 col-span-2 flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-2.5 lg:order-2 lg:p-2">
+                                <div>
+                                    <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total cobrado</span>
+                                    <strong class="dashboard-amount mt-0.5 block break-words text-base font-black text-emerald-800 lg:text-sm">${formatMoney(summary.collected)}</strong>
+                                </div>
+                                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-700" aria-hidden="true">✓</span>
+                            </div>
+                            <div class="order-5 col-span-2 grid grid-cols-2 gap-1.5 lg:order-5 lg:gap-1">
+                                <div class="rounded-lg bg-slate-50 px-2 py-2">
+                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Inicio</span>
+                                    <strong class="mt-0.5 block text-[11px] font-bold text-slate-700">${formatDateForInput(loan.startDate) || '—'}</strong>
+                                </div>
+                                <div class="rounded-lg bg-slate-50 px-2 py-2">
+                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Vencimiento</span>
+                                    <strong class="mt-0.5 block text-[11px] font-bold text-slate-700">${formatDateForInput(loan.endDate) || '—'}</strong>
+                                </div>
+                            </div>
                         </div>
                     `;
+                    const toggle = card.querySelector('[data-card-toggle]');
+                    toggle.onclick = event => {
+                        event.stopPropagation();
+                        const details = card.querySelector('[data-loan-details]');
+                        const collapsed = details.classList.toggle('hidden');
+                        toggle.setAttribute('aria-expanded', String(!collapsed));
+                        toggle.setAttribute('aria-label', `${collapsed ? 'Expandir' : 'Colapsar'} resumen del préstamo`);
+                        toggle.querySelector('[data-card-toggle-icon]').classList.toggle('rotate-180', !collapsed);
+                        const allCards = [...grid.querySelectorAll('[data-loan-details]')];
+                        dashboardCardsCollapsed = allCards.length > 0 && allCards.every(item => item.classList.contains('hidden'));
+                        const collapseToggle = document.getElementById('dashboardCollapseToggle');
+                        if (collapseToggle) collapseToggle.textContent = dashboardCardsCollapsed ? 'Expandir tarjetas' : 'Colapsar tarjetas';
+                    };
                     grid.appendChild(card);
                 });
             });
 
-            document.getElementById('dashTotalPortfolio').textContent = formatMoney(totalPortfolio);
-            document.getElementById('dashTotalCollected').textContent = formatMoney(totalCollected);
-            document.getElementById('dashTotalPendingCapital').textContent = formatMoney(totalPendingCapital);
-            document.getElementById('dashTotalClients').textContent = window.clientsData.length;
-            document.getElementById('dashActiveLoansCount').textContent = `${totalActiveLoans} préstamos activos`;
+            document.getElementById('dashTotalPortfolio').textContent = formatMoney(totals.portfolio);
+            document.getElementById('dashTotalCollected').textContent = formatMoney(totals.collected);
+            document.getElementById('dashTotalPendingCapital').textContent = formatMoney(totals.principal);
+            document.getElementById('dashTotalClients').textContent = selectedClients.length;
+            document.getElementById('dashActiveLoansCount').textContent = `${totals.loans} préstamos${clientFilter.value === 'all' ? ' activos' : ' del cliente'}`;
+            document.getElementById('dashMonthlyDue').textContent = formatMoney(totals.monthlyDue);
+            document.getElementById('dashMonthlyCollected').textContent = formatMoney(totals.monthlyCollected);
+            document.getElementById('dashSelectedMonthLabel').textContent = monthLabel;
+            document.getElementById('dashboardFilterSummary').textContent =
+                `${clientFilter.value === 'all' ? 'Todos los clientes' : clientFilter.selectedOptions[0]?.textContent || 'Cliente'} · ${monthLabel}`;
+            const collapseToggle = document.getElementById('dashboardCollapseToggle');
+            if (collapseToggle) collapseToggle.textContent = dashboardCardsCollapsed ? 'Expandir tarjetas' : 'Colapsar tarjetas';
+            setDashboardPrivacy(dashboardAmountsHidden);
         }
 
         function generatePDF() {
@@ -2711,15 +3653,19 @@
             if (!loanObj) return;
 
             document.getElementById('pdfLoanTitleHeader').textContent = `Préstamo: ${loanObj.loanName}`;
+            document.getElementById('pdfLoanId').textContent = `ID del préstamo: ${loanObj.id || '—'}`;
             document.getElementById('pdfDate').textContent = `Fecha: ${new Intl.DateTimeFormat('es-CR').format(new Date())}`;
             document.getElementById('pdfDebtor').textContent = loanObj.debtorName;
             document.getElementById('pdfDebtorId').textContent = `Cédula: ${client?.idNumber || 'N/A'}`;
             document.getElementById('pdfDebtorPhone').textContent = `Tel: ${client?.phone || 'N/A'}`;
             document.getElementById('pdfLoanAmount').textContent = `CRC ${formatPdfAmount(loanObj.loanAmount)}`;
-            document.getElementById('pdfRate').textContent = `${Number(loanObj.monthlyInterestRate).toLocaleString('es-CR')}%`;
+            const repaymentLabel = loanObj.repaymentMode === 'interest_only' ? 'Solo intereses' : 'Capital + intereses';
+            document.getElementById('pdfRate').textContent = `${repaymentLabel} · ${Number(loanObj.monthlyInterestRate).toLocaleString('es-CR')}%`;
             document.getElementById('pdfInterest').textContent = `CRC ${formatPdfAmount(loanObj.monthlyInterest)}`;
             document.getElementById('pdfPeriod').textContent = `${loanObj.frequency.toUpperCase()} (${calculatedRows.length} cuotas)`;
-            document.getElementById('pdfInstallment').textContent = `CRC ${formatPdfAmount(getLoanFinancialSummary(loanObj).installmentAmount)}`;
+            document.getElementById('pdfInstallment').textContent = loanObj.repaymentMode === 'interest_only'
+                ? `CRC ${formatPdfAmount(getLoanFinancialSummary(loanObj).installmentAmount)} · última incluye capital`
+                : `CRC ${formatPdfAmount(getLoanFinancialSummary(loanObj).installmentAmount)}`;
             document.getElementById('pdfAsOf').textContent = formatDateForInput(loanObj.asOfDate) || loanObj.asOfDate || '—';
 
             let totalPaidAmount = 0, totalPaidCapital = 0, totalPaidInterest = 0;
@@ -2731,10 +3677,13 @@
                     totalPaidInterest += r.interes;
                 }
             });
+            const extraPayments = loanObj.extraPayments || [];
+            const extraCapital = extraPayments.reduce((total, payment) => total + (Number(payment.amount) || 0), 0);
+            totalPaidAmount += extraCapital;
+            totalPaidCapital += extraCapital;
 
             const capitalRemaining = Math.max(0, loanObj.loanAmount - totalPaidCapital);
-            const totalContractDebt = calculatedRows.reduce((acc, r) => acc + r.cuota, 0);
-            const totalRemaining = Math.max(0, totalContractDebt - totalPaidAmount);
+            const totalRemaining = calculatedRows.reduce((total, row) => total + (row.isPaid ? 0 : row.cuota), 0);
 
             document.getElementById('pdfTotalPaid').textContent = `CRC ${formatPdfAmount(totalPaidAmount)}`;
             document.getElementById('pdfCapitalPaid').textContent = `CRC ${formatPdfAmount(totalPaidCapital)}`;
@@ -2755,6 +3704,25 @@
                     <td class="p-1.5 text-center font-bold ${r.isPaid ? 'text-emerald-700' : 'text-slate-400'}">${r.isPaid ? 'PAGADO' : 'PENDIENTE'}</td>
                     <td class="p-1.5 text-right font-semibold">${formatPdfAmount(r.saldo)}</td>
                 `;
+                pdfBody.appendChild(tr);
+            });
+            extraPayments.forEach((payment, index) => {
+                const tr = document.createElement('tr');
+                const values = [
+                    `Abono ${index + 1}`,
+                    `${formatDateForInput(payment.date)}${payment.reference ? ` · ${payment.reference}` : ''}`,
+                    formatPdfAmount(payment.amount),
+                    formatPdfAmount(payment.amount),
+                    formatPdfAmount(0),
+                    'PAGADO',
+                    '—'
+                ];
+                values.forEach((value, cellIndex) => {
+                    const td = document.createElement('td');
+                    td.className = `p-1.5 ${[2, 3, 4, 6].includes(cellIndex) ? 'text-right' : 'text-center'}`;
+                    td.textContent = value;
+                    tr.appendChild(td);
+                });
                 pdfBody.appendChild(tr);
             });
             document.getElementById('pdfModal').classList.remove('hidden');
@@ -2788,6 +3756,9 @@
             let csvContent = "data:text/csv;charset=utf-8,Cuota #,Fecha,Cuota,Capital,Interes,Estado,Saldo\n";
             calculatedRows.forEach(r => {
                 csvContent += `${r.cuotaNum},"${r.fecha}",${r.cuota.toFixed(2)},${r.capital.toFixed(2)},${r.interes.toFixed(2)},"${r.isPaid ? 'PAGADO' : 'PENDIENTE'}",${r.saldo.toFixed(2)}\n`;
+            });
+            (loanObj.extraPayments || []).forEach((payment, index) => {
+                csvContent += `"Abono ${index + 1}","${formatDateForInput(payment.date)}",${payment.amount.toFixed(2)},${payment.amount.toFixed(2)},0,"PAGADO",\n`;
             });
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
