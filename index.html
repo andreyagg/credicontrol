@@ -1470,12 +1470,12 @@
                 return row.isPaid || !dueDate ? maximum : Math.max(maximum, dayNumber(today) - dayNumber(dueDate));
             }, 0);
             if (overdueDays >= appSettings.redAfterDays) {
-                return { color: 'bg-rose-50 text-rose-700', icon: '!', label: `${overdueDays} d?as de atraso` };
+                return { color: 'bg-rose-50 text-rose-700', icon: '!', label: `${overdueDays} días de atraso` };
             }
             if (overdueDays > appSettings.graceDays) {
-                return { color: 'bg-amber-50 text-amber-700', icon: '!', label: `${overdueDays} d?as de atraso` };
+                return { color: 'bg-amber-50 text-amber-700', icon: '!', label: `${overdueDays} días de atraso` };
             }
-            return { color: 'bg-emerald-50 text-emerald-700', icon: '?', label: overdueDays ? 'En per?odo de gracia' : 'Al d?a' };
+            return { color: 'bg-emerald-50 text-emerald-700', icon: '✓', label: overdueDays ? 'En período de gracia' : 'Al día' };
         }
 
         function fillSettingsForm() {

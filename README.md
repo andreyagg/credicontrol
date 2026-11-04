@@ -74,6 +74,6 @@ Firestore records remain in Firebase. Files that existed only in a browser's Ind
 
 ## Loan defaults and payment alerts
 
-**Configuraci?n** saves the initial monthly rate, frequency, and repayment mode for new loans, including the first loan created with a client. Existing loans retain their own terms. Preferences are stored per account in this browser/device; they are not synchronized through Firebase or included in the client JSON backup.
+**Configuración** saves the initial monthly rate, frequency, and repayment mode for new loans, including the first loan created with a client. Existing loans retain their own terms. Preferences are stored per account in this browser/device; they are not synchronized through Firebase or included in the client JSON backup.
 
-Loan cards show a payment status based on the oldest unpaid installment and today?s local calendar date: green when current or within the configured grace period, yellow after grace, and red starting at the configured overdue-day threshold (5 days initially, with 0 grace days). The red threshold must be greater than the grace period. Paid installments do not trigger alerts. These alerts do not change balances or add late fees.
+Loan cards show a payment status based on the oldest unpaid installment and today’s local calendar date: green when current or within the configured grace period, yellow after grace, and red starting at the configured overdue-day threshold (5 days initially, with 0 grace days). The red threshold must be greater than the grace period. Paid installments do not trigger alerts. These alerts do not change balances or add late fees.
