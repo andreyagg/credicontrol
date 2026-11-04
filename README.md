@@ -29,7 +29,9 @@ Password reset stays with Firebase Authentication. On the login screen, choose *
 
 The app does not use Firebase Storage. The R2 bucket is private and is accessed only through the Worker, which verifies Firebase ID tokens and restricts every object path to the authenticated user's UID. Do not make the bucket public or put Cloudflare API tokens in browser code.
 
-1. In Cloudflare, open **R2 Object Storage** and create a private bucket named `credicontrol-files`.
+The R2 S3 API endpoint shown in Cloudflare (for example, `https://<account-id>.r2.cloudflarestorage.com/<bucket>`) is not the app's API URL. Do not put that endpoint or S3 credentials in `storage-config.js`; the Worker accesses the bucket through its `FILES_BUCKET` binding.
+
+1. In Cloudflare, open **R2 Object Storage** and create a private bucket. The current bucket in this account is named `credicontrol`; use that exact name in the Worker binding. The `pays` entry shown inside the bucket is only a folder/prefix, not the bucket name.
 2. Edit `cloudflare/wrangler.toml`:
    - Set `ALLOWED_ORIGINS` to the exact Vercel production origin, without a trailing slash. You may comma-separate explicitly trusted custom domains. Do not use `*`.
    - Confirm `FIREBASE_PROJECT_ID` is `micarteradeprestamos`.
