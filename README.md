@@ -8,7 +8,7 @@ When creating or editing a loan, choose whether to enter the monthly interest as
 
 Use **Abono a capital** to record an extraordinary principal payment separately from regular installments. After each abono, either recalculate future interest and keep the regular installment amount to shorten the payoff schedule, or preserve the planned dates and interest and adjust principal against the remaining balance. For interest-only loans, recalculation updates future interest on the reduced balance while keeping the final due date.
 
-The dashboard can be filtered by client and month to compare scheduled installments with payments received across that client's loans. **Informe consolidado** opens a printable/downloadable debt summary with per-loan and portfolio totals. Dashboard amounts can be hidden for privacy, and loan cards can be collapsed individually or all at once.
+The dashboard can be filtered by client and month and searched by loan name, number, or client. Loan cards show the original principal, collected amount, outstanding principal, installment, rate, and dates; use **Registrar pago** for the next unpaid installment or **Ver detalles** to open the loan. The four portfolio summary cards include monthly scheduled and collected totals plus client and loan counts. **Informe consolidado** opens a printable/downloadable debt summary with per-loan and portfolio totals. Dashboard amounts can be hidden for privacy, and loan cards can be collapsed individually or all at once.
 
 ## Deploy the site to Vercel
 
@@ -71,3 +71,9 @@ Cloudflare R2 and Vercel usage may incur charges if included quotas are exceeded
 ## Existing files and data
 
 Firestore records remain in Firebase. Files that existed only in a browser's IndexedDB can be migrated when that same browser signs in and synchronizes; older Firebase Storage files are not copied automatically to R2 and must be reattached or migrated separately. Browser-local data does not automatically transfer between a `file://` copy and the Vercel domain. The in-app JSON backup is an export only; store it securely and do not commit it to GitHub.
+
+## Loan defaults and payment alerts
+
+**Configuraci?n** saves the initial monthly rate, frequency, and repayment mode for new loans, including the first loan created with a client. Existing loans retain their own terms. Preferences are stored per account in this browser/device; they are not synchronized through Firebase or included in the client JSON backup.
+
+Loan cards show a payment status based on the oldest unpaid installment and today?s local calendar date: green when current or within the configured grace period, yellow after grace, and red starting at the configured overdue-day threshold (5 days initially, with 0 grace days). The red threshold must be greater than the grace period. Paid installments do not trigger alerts. These alerts do not change balances or add late fees.

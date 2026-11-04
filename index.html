@@ -135,6 +135,9 @@
             <button onclick="switchTab('loans')" id="tabBtn-loans" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">
                 <span class="mr-2" aria-hidden="true">₡</span> Préstamos
             </button>
+            <button onclick="switchTab('settings')" id="tabBtn-settings" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">
+                <span class="mr-2" aria-hidden="true">⚙</span> Configuración
+            </button>
         </nav>
         <div class="p-3 border-t border-slate-800">
             <button onclick="exportBackupJSON()" title="Guardar copia de seguridad" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold bg-emerald-700 hover:bg-emerald-600 text-white transition">
@@ -159,6 +162,10 @@
         <button onclick="switchTab('loans')" id="mobileNav-loans" class="flex flex-col items-center gap-1 text-slate-400 font-medium text-[11px] py-1 px-3 rounded-xl transition">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             Préstamos
+        </button>
+        <button onclick="switchTab('settings')" id="mobileNav-settings" class="flex flex-col items-center gap-1 text-slate-400 font-medium text-[10px] py-1 px-1.5 rounded-xl transition">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m19.4 15 .1.1a1.8 1.8 0 0 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 0 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 0 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3h-.2a1.8 1.8 0 0 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 0 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9v-.2a1.8 1.8 0 0 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 0 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 0 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 3Z"/></svg>
+            Config.
         </button>
         <button onclick="logoutFirebaseAccount()" class="flex flex-col items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:text-white" aria-label="Cerrar sesión">
             <span class="text-lg" aria-hidden="true">↪</span>
@@ -192,64 +199,80 @@
 
         <!-- ==================== MÓDULO 1: DASHBOARD GENERAL ==================== -->
         <div id="module-dashboard" class="space-y-6">
-            <div id="dashboardSummaryCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total Cartera Prestada</span>
-                    <div class="dashboard-amount text-2xl font-bold text-slate-900" id="dashTotalPortfolio">₡0.00</div>
-                    <span class="text-xs text-blue-600 font-semibold" id="dashActiveLoansCount">0 préstamos activos</span>
+            <div id="dashboardSummaryCards" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700" aria-hidden="true">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 9.5 12 4l9 5.5M5 10v8m4-8v8m6-8v8m4-8v8M3 20h18M2 9.5h20"/></svg>
+                    </span>
+                    <div class="min-w-0">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Capital prestado</span>
+                        <div class="dashboard-amount mt-0.5 truncate text-xl font-extrabold text-slate-900" id="dashTotalPortfolio">₡0.00</div>
+                        <span class="text-[10px] text-slate-500"><span id="dashActiveLoansCount">0 préstamos</span> · <span id="dashTotalClients">0</span> clientes</span>
+                    </div>
                 </div>
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Total Recaudado</span>
-                    <div class="dashboard-amount text-2xl font-bold text-emerald-600" id="dashTotalCollected">₡0.00</div>
-                    <span class="text-xs text-slate-500">Abonos a capital e intereses</span>
+                <div class="flex items-center gap-3 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700" aria-hidden="true">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m3.5 16 5-5 4 3.5L20.5 6M15 6h5.5v5.5"/></svg>
+                    </span>
+                    <div class="min-w-0">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Total cobrado</span>
+                        <div class="dashboard-amount mt-0.5 truncate text-xl font-extrabold text-emerald-700" id="dashTotalCollected">₡0.00</div>
+                        <span class="text-[10px] text-slate-500">Este mes: <strong id="dashMonthlyCollected" class="dashboard-amount font-semibold text-emerald-700">₡0.00</strong></span>
+                    </div>
                 </div>
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Saldo Capital por Cobrar</span>
-                    <div class="dashboard-amount text-2xl font-bold text-amber-600" id="dashTotalPendingCapital">₡0.00</div>
-                    <span class="text-xs text-slate-500">Capital insoluto activo</span>
+                <div class="flex items-center gap-3 rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700" aria-hidden="true">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3v18m-7-3h14M5 7h14M7 7l-3 8h6L7 7Zm10 0-3 8h6l-3-8Z"/></svg>
+                    </span>
+                    <div class="min-w-0">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Saldo pendiente</span>
+                        <div class="dashboard-amount mt-0.5 truncate text-xl font-extrabold text-amber-700" id="dashTotalPendingCapital">₡0.00</div>
+                        <span class="text-[10px] text-slate-500">Capital por cobrar</span>
+                    </div>
                 </div>
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Clientes Registrados</span>
-                    <div class="text-2xl font-bold text-blue-600" id="dashTotalClients">0</div>
-                    <span class="text-xs text-slate-500">Expedientes activos</span>
-                </div>
-                <div class="bg-white p-5 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white shadow-sm">
-                    <span class="text-xs font-semibold text-indigo-500 uppercase tracking-wider block mb-1">Cuotas programadas del mes</span>
-                    <div class="dashboard-amount text-xl font-extrabold text-indigo-800" id="dashMonthlyDue">₡0.00</div>
-                    <span class="text-xs text-indigo-600" id="dashSelectedMonthLabel">Mes seleccionado</span>
-                </div>
-                <div class="bg-white p-5 rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white shadow-sm">
-                    <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wider block mb-1">Cobrado en el mes</span>
-                    <div class="dashboard-amount text-xl font-extrabold text-emerald-800" id="dashMonthlyCollected">₡0.00</div>
-                    <span class="text-xs text-emerald-600">Incluye abonos extraordinarios</span>
+                <div class="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden="true">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13H4V6a1 1 0 0 1 1-1Z"/></svg>
+                    </span>
+                    <div class="min-w-0">
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Cuotas del mes</span>
+                        <div class="dashboard-amount mt-0.5 truncate text-xl font-extrabold text-indigo-700" id="dashMonthlyDue">₡0.00</div>
+                        <span class="text-[10px] text-indigo-600" id="dashSelectedMonthLabel">Mes seleccionado</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
-                <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
+            <div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div class="min-w-0">
                         <h2 class="text-lg font-bold text-slate-900">Resumen de Préstamos Activos</h2>
-                        <p class="text-xs text-slate-500">Filtre por cliente y mes para revisar cuotas, cobros y saldos consolidados</p>
+                        <p class="text-xs text-slate-500">Revise cuotas, cobros y saldos de su cartera</p>
                     </div>
-                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:items-end">
-                        <div>
-                            <label for="dashboardClientFilter" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Cliente</label>
-                            <select id="dashboardClientFilter" onchange="renderDashboard()" class="w-full min-w-48 rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"></select>
-                        </div>
-                        <div>
-                            <label for="dashboardMonthFilter" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Mes del informe</label>
-                            <input id="dashboardMonthFilter" type="month" onchange="renderDashboard()" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                        </div>
-                        <button onclick="generateConsolidatedDebtReport()" class="rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-white shadow transition hover:bg-slate-900">Informe consolidado</button>
-                        <button id="dashboardPrivacyToggle" type="button" onclick="toggleDashboardAmounts()" aria-pressed="false" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
-                            <span id="dashboardPrivacyIcon" aria-hidden="true">◉</span><span id="dashboardPrivacyLabel">Ocultar montos</span>
-                        </button>
-                        <button id="dashboardCollapseToggle" type="button" onclick="toggleAllDashboardCards()" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">Colapsar tarjetas</button>
-                        <button onclick="openNewLoanModal()" class="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow transition hover:bg-blue-700">+ Registrar Préstamo</button>
-                    </div>
+                    <div id="dashboardFilterSummary" class="text-[11px] font-medium text-slate-500"></div>
                 </div>
-                <div id="dashboardFilterSummary" class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"></div>
-                <div id="dashboardLoansGrid" class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"></div>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1fr)_minmax(10rem,.8fr)_minmax(14rem,1.2fr)]">
+                    <label class="block">
+                        <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Cliente</span>
+                        <select id="dashboardClientFilter" onchange="renderDashboard()" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"></select>
+                    </label>
+                    <label class="block">
+                        <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Mes del informe</span>
+                        <input id="dashboardMonthFilter" type="month" onchange="renderDashboard()" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    </label>
+                    <label class="block">
+                        <span class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Buscar préstamo</span>
+                        <input id="dashboardLoanSearch" type="search" oninput="renderDashboard()" placeholder="Nombre, número o cliente" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-xs font-medium text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    </label>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="generateConsolidatedDebtReport()" class="rounded-xl bg-slate-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-slate-900">▤ Informe consolidado</button>
+                    <button id="dashboardPrivacyToggle" type="button" onclick="toggleDashboardAmounts()" aria-pressed="false" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">
+                        <span id="dashboardPrivacyIcon" aria-hidden="true">◉</span><span id="dashboardPrivacyLabel">Ocultar montos</span>
+                    </button>
+                    <button id="dashboardCollapseToggle" type="button" onclick="toggleAllDashboardCards()" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50">Colapsar tarjetas</button>
+                    <button onclick="openNewLoanModal()" class="ml-auto rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700">+ Registrar préstamo</button>
+                </div>
+                <div id="dashboardLoansGrid" class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"></div>
             </div>
         </div>
 
@@ -322,6 +345,67 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div id="module-settings" class="hidden space-y-6">
+            <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="border-b border-slate-100 bg-gradient-to-r from-indigo-50 via-white to-white p-5 sm:p-6">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Preferencias de cartera</span>
+                    <h2 class="mt-1 text-xl font-extrabold text-slate-900">Configuración</h2>
+                    <p class="mt-1 text-sm text-slate-500">Define valores iniciales para nuevos préstamos y alertas visuales de mora.</p>
+                </div>
+                <form id="appSettingsForm" onsubmit="event.preventDefault(); saveAppSettings()" class="space-y-6 p-5 sm:p-6">
+                    <section class="space-y-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Valores predeterminados de préstamos</h3>
+                            <p class="mt-1 text-xs text-slate-500">Solo se usan al registrar un préstamo nuevo. No modifican contratos existentes.</p>
+                        </div>
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-semibold text-slate-600">Tasa de interés mensual (%)</span>
+                                <input id="settingsDefaultRate" type="number" min="0" max="100" step="0.001" required class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            </label>
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-semibold text-slate-600">Periodicidad predeterminada</span>
+                                <select id="settingsDefaultFrequency" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                    <option value="semanal">Semanal</option>
+                                    <option value="quincenal">Quincenal</option>
+                                    <option value="mensual">Mensual</option>
+                                </select>
+                            </label>
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-semibold text-slate-600">Modalidad predeterminada</span>
+                                <select id="settingsDefaultRepaymentMode" class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                    <option value="principal_interest">Capital + intereses</option>
+                                    <option value="interest_only">Solo intereses</option>
+                                </select>
+                            </label>
+                        </div>
+                    </section>
+                    <section class="space-y-4 border-t border-slate-100 pt-5">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Alertas de atraso</h3>
+                            <p class="mt-1 text-xs text-slate-500">Las tarjetas mostrarán un icono verde al día, amarillo durante el atraso inicial y rojo al alcanzar el umbral configurado.</p>
+                        </div>
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-semibold text-slate-600">Días de gracia después del vencimiento</span>
+                                <input id="settingsGraceDays" type="number" min="0" max="30" step="1" required class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                <span class="mt-1 block text-[11px] text-slate-500">Durante estos días, el estado permanece al día.</span>
+                            </label>
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-semibold text-slate-600">Mostrar rojo a partir de (días vencidos)</span>
+                                <input id="settingsRedAfterDays" type="number" min="1" max="90" step="1" required class="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                <span class="mt-1 block text-[11px] text-slate-500">El rojo se aplica desde este día; antes se muestra amarillo.</span>
+                            </label>
+                        </div>
+                    </section>
+                    <div class="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-[11px] text-slate-500">Estas preferencias se guardan en este navegador y dispositivo.</p>
+                        <button type="submit" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700">Guardar configuración</button>
+                    </div>
+                </form>
+            </section>
         </div>
 
         <!-- ==================== MÓDULO 3: PRÉSTAMOS & AMORTIZACIÓN ==================== -->
@@ -1335,10 +1419,104 @@
         let confirmDialogPreviousFocus = null;
         let proofViewerObjectUrl = null;
 
+        const DEFAULT_APP_SETTINGS = {
+            defaultMonthlyRate: 3.445,
+            defaultFrequency: 'quincenal',
+            defaultRepaymentMode: 'principal_interest',
+            graceDays: 0,
+            redAfterDays: 5
+        };
+        let appSettings = { ...DEFAULT_APP_SETTINGS };
+
         const PAYMENT_PROOF_DB_NAME = 'cartera_prestamos_payment_proofs';
         const PAYMENT_PROOF_STORE_NAME = 'proofs';
 
         let firebaseAuthMode = 'signin';
+
+        function getAppSettingsStorageKey() {
+            const userId = window.firebaseUser?.uid || localStorage.getItem('cartera_prestamos_owner_uid') || 'local';
+            return `credicontrol_app_settings_${userId}`;
+        }
+
+        function loadAppSettings() {
+            let storedSettings;
+            try {
+                storedSettings = JSON.parse(localStorage.getItem(getAppSettingsStorageKey()) || 'null');
+            } catch (error) {
+                console.error('Could not read saved app settings:', error);
+                showToast('No se pudieron leer las preferencias guardadas; se usarán los valores predeterminados.');
+            }
+            appSettings = { ...DEFAULT_APP_SETTINGS };
+            if (storedSettings && typeof storedSettings === 'object') {
+                if (Number.isFinite(storedSettings.defaultMonthlyRate) && storedSettings.defaultMonthlyRate >= 0 && storedSettings.defaultMonthlyRate <= 100) appSettings.defaultMonthlyRate = storedSettings.defaultMonthlyRate;
+                if (['semanal', 'quincenal', 'mensual'].includes(storedSettings.defaultFrequency)) appSettings.defaultFrequency = storedSettings.defaultFrequency;
+                if (['principal_interest', 'interest_only'].includes(storedSettings.defaultRepaymentMode)) appSettings.defaultRepaymentMode = storedSettings.defaultRepaymentMode;
+                if (Number.isInteger(storedSettings.graceDays) && storedSettings.graceDays >= 0 && storedSettings.graceDays <= 30 &&
+                    Number.isInteger(storedSettings.redAfterDays) && storedSettings.redAfterDays > storedSettings.graceDays && storedSettings.redAfterDays <= 90) {
+                    appSettings.graceDays = storedSettings.graceDays;
+                    appSettings.redAfterDays = storedSettings.redAfterDays;
+                }
+            }
+            fillSettingsForm();
+        }
+
+        function getLoanPaymentStatus(rows, today = getLocalDateString()) {
+            const dayNumber = iso => {
+                const [year, month, day] = iso.split('-').map(Number);
+                return Date.UTC(year, month - 1, day) / 86400000;
+            };
+            const overdueDays = rows.reduce((maximum, row) => {
+                const dueDate = parseDateInput(row.fecha);
+                return row.isPaid || !dueDate ? maximum : Math.max(maximum, dayNumber(today) - dayNumber(dueDate));
+            }, 0);
+            if (overdueDays >= appSettings.redAfterDays) {
+                return { color: 'bg-rose-50 text-rose-700', icon: '!', label: `${overdueDays} d?as de atraso` };
+            }
+            if (overdueDays > appSettings.graceDays) {
+                return { color: 'bg-amber-50 text-amber-700', icon: '!', label: `${overdueDays} d?as de atraso` };
+            }
+            return { color: 'bg-emerald-50 text-emerald-700', icon: '?', label: overdueDays ? 'En per?odo de gracia' : 'Al d?a' };
+        }
+
+        function fillSettingsForm() {
+            const rateInput = document.getElementById('settingsDefaultRate');
+            if (!rateInput) return;
+            rateInput.value = appSettings.defaultMonthlyRate;
+            document.getElementById('settingsDefaultFrequency').value = appSettings.defaultFrequency;
+            document.getElementById('settingsDefaultRepaymentMode').value = appSettings.defaultRepaymentMode;
+            document.getElementById('settingsGraceDays').value = appSettings.graceDays;
+            document.getElementById('settingsRedAfterDays').value = appSettings.redAfterDays;
+        }
+
+        function saveAppSettings() {
+            const settings = {
+                defaultMonthlyRate: Number(document.getElementById('settingsDefaultRate').value),
+                defaultFrequency: document.getElementById('settingsDefaultFrequency').value,
+                defaultRepaymentMode: document.getElementById('settingsDefaultRepaymentMode').value,
+                graceDays: Number(document.getElementById('settingsGraceDays').value),
+                redAfterDays: Number(document.getElementById('settingsRedAfterDays').value)
+            };
+            if (!Number.isFinite(settings.defaultMonthlyRate) || settings.defaultMonthlyRate < 0 || settings.defaultMonthlyRate > 100) {
+                showToast('La tasa mensual debe estar entre 0 y 100%.');
+                return;
+            }
+            if (!Number.isInteger(settings.graceDays) || settings.graceDays < 0 || settings.graceDays > 30 ||
+                !Number.isInteger(settings.redAfterDays) || settings.redAfterDays < 1 || settings.redAfterDays > 90 ||
+                settings.redAfterDays <= settings.graceDays) {
+                showToast('Configure días de gracia entre 0 y 30 y un umbral rojo posterior, hasta 90 días.');
+                return;
+            }
+            try {
+                localStorage.setItem(getAppSettingsStorageKey(), JSON.stringify(settings));
+            } catch (error) {
+                console.error('Could not save app settings:', error);
+                showToast(`No se pudo guardar la configuración: ${error.message}`);
+                return;
+            }
+            appSettings = settings;
+            renderDashboard();
+            showToast('Configuración guardada en este dispositivo.');
+        }
 
         function showLockError(message) {
             const error = document.getElementById('lockScreenError');
@@ -1500,6 +1678,7 @@
         }
 
         window.initApp = function() {
+            loadAppSettings();
             if (!window.clientsData || window.clientsData.length === 0) return;
             if (!window.currentClientId) {
                 window.currentClientId = window.clientsData[0].id;
@@ -1547,7 +1726,7 @@
         }
 
         function switchTab(tabId) {
-            ['dashboard', 'clients', 'loans'].forEach(t => {
+            ['dashboard', 'clients', 'loans', 'settings'].forEach(t => {
                 const mod = document.getElementById(`module-${t}`);
                 const btn = document.getElementById(`tabBtn-${t}`);
                 const mob = document.getElementById(`mobileNav-${t}`);
@@ -1569,6 +1748,7 @@
             if (activeMob) activeMob.className = "flex flex-col items-center gap-1 text-blue-400 font-bold text-[11px] py-1 px-3 rounded-xl transition";
 
             if (tabId === 'dashboard') renderDashboard();
+            if (tabId === 'settings') fillSettingsForm();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -1793,10 +1973,11 @@
                 idDocName: '', patronalDocName: '', activeLoanId: newLoanId,
                 loans: [{
                     id: newLoanId, loanName: `Prestamo-${name.replace(/\s+/g, '')}`, debtorName: name,
-                    loanAmount: 100000, monthlyInterestRate: 3.445, monthlyInterest: 3445,
+                    loanAmount: 100000, monthlyInterestRate: appSettings.defaultMonthlyRate, monthlyInterest: 100000 * appSettings.defaultMonthlyRate / 100,
+                    interestInputMode: 'rate', repaymentMode: appSettings.defaultRepaymentMode,
                     startDate: loanStartDate,
                     endDate: getLocalDateString(loanEndDate),
-                    frequency: 'quincenal', asOfDate: loanStartDate,
+                    frequency: appSettings.defaultFrequency, asOfDate: loanStartDate,
                     customPaidState: {}, paymentsInfo: {}
                 }]
             };
@@ -1826,13 +2007,13 @@
             endDate.setFullYear(endDate.getFullYear() + 1);
             document.getElementById('modalNewLoanName').value = `Prestamo-${client.name.replace(/\s+/g, '')}`;
             document.getElementById('modalNewLoanAmount').value = '100000';
-            document.getElementById('modalNewLoanRate').value = '3.445';
+            document.getElementById('modalNewLoanRate').value = appSettings.defaultMonthlyRate;
             document.getElementById('modalNewLoanInterestMode').value = 'rate';
-            document.getElementById('modalNewLoanRepaymentMode').value = 'principal_interest';
+            document.getElementById('modalNewLoanRepaymentMode').value = appSettings.defaultRepaymentMode;
             document.getElementById('modalNewLoanInterest').value = '';
             document.getElementById('modalNewLoanStartDate').value = formatDateForInput(today);
             document.getElementById('modalNewLoanEndDate').value = formatDateForInput(getLocalDateString(endDate));
-            document.getElementById('modalNewLoanFrequency').value = 'quincenal';
+            document.getElementById('modalNewLoanFrequency').value = appSettings.defaultFrequency;
             document.getElementById('modalNewLoanAsOfDate').value = formatDateForInput(today);
             previewNewLoan();
             document.getElementById('newLoanModal').classList.remove('hidden');
@@ -3490,7 +3671,8 @@
             const clients = window.clientsData;
             const clientFilter = document.getElementById('dashboardClientFilter');
             const monthFilter = document.getElementById('dashboardMonthFilter');
-            if (!clientFilter || !monthFilter) return;
+            const searchInput = document.getElementById('dashboardLoanSearch');
+            if (!clientFilter || !monthFilter || !searchInput) return;
 
             const previousClientId = clientFilter.value || 'all';
             clientFilter.replaceChildren();
@@ -3509,6 +3691,7 @@
 
             const month = monthFilter.value;
             const monthLabel = getDashboardMonthLabel(month);
+            const searchQuery = searchInput.value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-CR');
             const selectedClients = clientFilter.value === 'all'
                 ? clients
                 : clients.filter(client => client.id === clientFilter.value);
@@ -3530,25 +3713,42 @@
                 clientSummaries.push({ client, loans });
             });
 
+            const visibleClientSummaries = clientSummaries.map(({ client, loans }) => ({
+                client,
+                loans: loans.filter(({ loan }) => {
+                    if (!searchQuery) return true;
+                    const searchable = `${client.name || ''} ${loan.loanName || ''} ${loan.id || ''} ${loan.frequency || ''}`
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toLocaleLowerCase('es-CR');
+                    return searchable.includes(searchQuery);
+                })
+            })).filter(({ loans }) => loans.length);
+            const visibleLoanCount = visibleClientSummaries.reduce((count, item) => count + item.loans.length, 0);
+
             grid.replaceChildren();
-            if (!totals.loans) {
+            if (!visibleLoanCount) {
                 const empty = document.createElement('p');
                 empty.className = 'col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500';
-                empty.textContent = clientFilter.value === 'all'
-                    ? 'Aún no hay préstamos para mostrar.'
-                    : 'Este cliente todavía no tiene préstamos registrados.';
+                empty.textContent = searchQuery
+                    ? 'No se encontraron préstamos con esa búsqueda.'
+                    : clientFilter.value === 'all'
+                        ? 'Aún no hay préstamos para mostrar.'
+                        : 'Este cliente todavía no tiene préstamos registrados.';
                 grid.appendChild(empty);
             }
 
-            clientSummaries.forEach(({ client, loans }) => {
+            visibleClientSummaries.forEach(({ client, loans }) => {
                 loans.forEach(({ loan, summary }, loanIndex) => {
                     const percent = summary.rows.length ? Math.min(100, Math.round(summary.paidCount / summary.rows.length * 100)) : 0;
                     const nextInstallment = summary.rows.find(row => !row.isPaid) || summary.rows[summary.rows.length - 1];
                     const installmentAmount = nextInstallment?.cuota ?? getLoanFinancialSummary(loan).installmentAmount;
                     const interestOnly = loan.repaymentMode === 'interest_only';
+                    const hasPendingInstallment = summary.rows.some(row => !row.isPaid);
+                    const paymentStatus = getLoanPaymentStatus(summary.rows);
                     const card = document.createElement('div');
-                    card.className = 'group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg';
-                    card.onclick = async () => {
+                    card.className = 'group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg';
+                    const openLoan = async registerPayment => {
                         if (!await confirmDiscardLoanEdit()) return;
                         window.currentClientId = client.id;
                         window.currentLoanId = loan.id;
@@ -3556,65 +3756,90 @@
                         renderClientDropdown();
                         loadCurrentLoanToForm();
                         calculateLoan();
+                        if (registerPayment) {
+                            const nextIndex = calculatedRows.findIndex(row => !row.isPaid);
+                            if (nextIndex < 0) {
+                                showToast('Este préstamo no tiene cuotas pendientes.');
+                                return;
+                            }
+                            openPaymentModal(nextIndex);
+                        }
                     };
+                    card.onclick = () => openLoan(false);
                     card.innerHTML = `
-                        <div class="border-b border-slate-100 bg-gradient-to-r from-blue-50 via-white to-white p-3 sm:p-4 lg:p-2">
-                            <div class="flex items-start justify-between gap-3">
+                        <div class="border-b border-slate-100 bg-gradient-to-r from-indigo-50/80 via-white to-white p-3 sm:p-4">
+                            <div class="flex items-start gap-3">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-lg font-bold text-indigo-600 ring-1 ring-indigo-100" aria-hidden="true">₡</span>
                                 <div class="min-w-0">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-blue-700">${loan.frequency}</span>
-                                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold text-slate-600">${interestOnly ? 'SOLO INTERESES' : 'CAPITAL + INTERESES'}</span>
+                                    <h4 class="truncate text-sm font-extrabold text-slate-900">${loan.loanName}</h4>
+                                    <p class="mt-0.5 truncate text-xs font-medium text-slate-600">${client.name}</p>
+                                    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                        <span class="rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700">${loan.frequency}</span>
+                                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-600">${interestOnly ? 'Solo intereses' : 'Capital + intereses'}</span>
                                     </div>
-                                    <h4 class="mt-1.5 truncate text-sm font-extrabold text-slate-900">${loan.loanName}</h4>
-                                    <p class="mt-0.5 truncate text-xs font-medium text-slate-500">${client.name}</p>
                                 </div>
-                                <div class="flex shrink-0 items-center gap-2">
-                                    <div class="rounded-xl bg-white px-3 py-2 text-right shadow-sm ring-1 ring-blue-100">
-                                        <span class="block text-[9px] font-bold uppercase tracking-wide text-slate-400">Avance</span>
-                                        <span class="text-lg font-black leading-tight text-blue-700">${percent}%</span>
-                                    </div>
-                                    <button type="button" data-card-toggle aria-expanded="${!dashboardCardsCollapsed}" aria-label="${dashboardCardsCollapsed ? 'Expandir' : 'Colapsar'} resumen del préstamo" class="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50">
+                                <div class="ml-auto flex shrink-0 items-start gap-2">
+                                    <span class="rounded-full ${summary.rows.length && !hasPendingInstallment ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'} px-2 py-1 text-[9px] font-bold">${summary.rows.length && !hasPendingInstallment ? 'Pagado' : 'Activo'}</span>
+                                    <button type="button" data-card-toggle aria-expanded="${!dashboardCardsCollapsed}" aria-label="${dashboardCardsCollapsed ? 'Expandir' : 'Colapsar'} resumen del préstamo" class="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50">
                                         <svg data-card-toggle-icon class="h-4 w-4 transition-transform ${dashboardCardsCollapsed ? '' : 'rotate-180'}" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                     </button>
                                 </div>
                             </div>
-                            <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-                                <div class="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all" style="width: ${percent}%"></div>
+                            <div class="mt-3 flex items-center gap-3">
+                                <span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${paymentStatus.color}" role="status"><span aria-hidden="true">${paymentStatus.icon}</span>${paymentStatus.label}</span>
+                                <span class="sr-only">Avance</span>
+                                <div class="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+                                    <div class="h-full rounded-full bg-gradient-to-r from-indigo-600 to-blue-400 transition-all" style="width: ${percent}%"></div>
+                                </div>
+                                <span class="text-[10px] font-bold text-slate-700">${percent}%</span>
                             </div>
                         </div>
-                        <div data-loan-details class="grid grid-cols-2 gap-2 p-3 sm:gap-3 sm:p-4 lg:grid-cols-4 lg:gap-1.5 lg:p-2 ${dashboardCardsCollapsed ? 'hidden' : ''}">
-                            <div class="col-span-2 rounded-xl border border-blue-100 bg-blue-50 p-2.5 lg:p-2">
-                                <span class="block text-[10px] font-bold uppercase tracking-wider text-blue-600">Monto prestado</span>
-                                <strong class="dashboard-amount mt-0.5 block break-words text-lg font-black tracking-tight text-blue-950 lg:text-base">${formatMoney(loan.loanAmount)}</strong>
-                            </div>
-                            <div class="order-2 rounded-xl border border-amber-100 bg-amber-50/80 p-2.5 lg:order-3 lg:p-2">
-                                <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700">Interés mensual</span>
-                                <strong class="mt-0.5 block text-sm font-extrabold text-amber-900">${summary.monthlyRate.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%</strong>
-                            </div>
-                            <div class="order-3 rounded-xl border border-indigo-100 bg-indigo-50/80 p-2.5 lg:order-4 lg:p-2">
-                                <span class="block text-[10px] font-bold uppercase tracking-wider text-indigo-700">${interestOnly ? 'Interés por cuota' : 'Cuota periódica'}</span>
-                                <strong class="dashboard-amount mt-0.5 block break-words text-sm font-extrabold text-indigo-900">${formatMoney(installmentAmount)}</strong>
-                                ${interestOnly ? '<span class="mt-0.5 block text-[9px] font-medium text-indigo-600">Capital incluido al final</span>' : ''}
-                            </div>
-                            <div class="order-4 col-span-2 flex items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-2.5 lg:order-2 lg:p-2">
-                                <div>
-                                    <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total cobrado</span>
-                                    <strong class="dashboard-amount mt-0.5 block break-words text-base font-black text-emerald-800 lg:text-sm">${formatMoney(summary.collected)}</strong>
+                        <div data-loan-details class="space-y-3 p-3 sm:p-4 ${dashboardCardsCollapsed ? 'hidden' : ''}">
+                            <div class="grid grid-cols-3 divide-x divide-slate-200 rounded-xl bg-slate-50/80 py-2">
+                                <div class="min-w-0 px-2">
+                                    <span class="block text-[9px] font-semibold text-slate-500">Capital inicial</span>
+                                    <strong class="dashboard-amount mt-0.5 block whitespace-nowrap text-[11px] font-extrabold tracking-tight text-slate-900">${formatMoney(loan.loanAmount)}</strong>
                                 </div>
-                                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-700" aria-hidden="true">✓</span>
+                                <div class="min-w-0 px-2">
+                                    <span class="block text-[9px] font-semibold text-slate-500">Cobrado</span>
+                                    <strong class="dashboard-amount mt-0.5 block whitespace-nowrap text-[11px] font-extrabold tracking-tight text-emerald-700">${formatMoney(summary.collected)}</strong>
+                                </div>
+                                <div class="min-w-0 px-2">
+                                    <span class="block text-[9px] font-semibold text-slate-500">Saldo capital</span>
+                                    <strong class="dashboard-amount mt-0.5 block whitespace-nowrap text-[11px] font-extrabold tracking-tight text-amber-700">${formatMoney(summary.capitalBalance)}</strong>
+                                </div>
                             </div>
-                            <div class="order-5 col-span-2 grid grid-cols-2 gap-1.5 lg:order-5 lg:gap-1">
-                                <div class="rounded-lg bg-slate-50 px-2 py-2">
-                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Inicio</span>
-                                    <strong class="mt-0.5 block text-[11px] font-bold text-slate-700">${formatDateForInput(loan.startDate) || '—'}</strong>
+                            <div class="grid grid-cols-2 gap-x-3 gap-y-2 border-b border-slate-100 pb-3">
+                                <div class="min-w-0">
+                                    <span class="block text-[9px] font-semibold text-slate-500">${interestOnly ? 'Interés por cuota' : 'Cuota periódica'}</span>
+                                    <strong class="dashboard-amount mt-0.5 block truncate text-sm font-bold text-indigo-800">${formatMoney(installmentAmount)}</strong>
                                 </div>
-                                <div class="rounded-lg bg-slate-50 px-2 py-2">
-                                    <span class="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Vencimiento</span>
-                                    <strong class="mt-0.5 block text-[11px] font-bold text-slate-700">${formatDateForInput(loan.endDate) || '—'}</strong>
+                                <div class="min-w-0">
+                                    <span class="block text-[9px] font-semibold text-slate-500">Interés mensual</span>
+                                    <strong class="mt-0.5 block text-sm font-bold text-slate-800">${summary.monthlyRate.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}%</strong>
                                 </div>
+                                <div class="min-w-0">
+                                    <span class="block text-[9px] font-semibold text-slate-500">Inicio</span>
+                                    <strong class="mt-0.5 block text-xs font-bold text-slate-700">${formatDateForInput(loan.startDate) || '—'}</strong>
+                                </div>
+                                <div class="min-w-0">
+                                    <span class="block text-[9px] font-semibold text-slate-500">Vencimiento</span>
+                                    <strong class="mt-0.5 block text-xs font-bold text-slate-700">${formatDateForInput(loan.endDate) || '—'}</strong>
+                                </div>
+                                ${interestOnly ? '<p class="col-span-2 text-[10px] font-medium text-indigo-600">El capital se cobra con la última cuota.</p>' : ''}
+                            </div>
+                            <div class="flex items-center justify-between gap-2">
+                                ${hasPendingInstallment ? '<button type="button" data-loan-action="payment" class="rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-indigo-700">Registrar pago</button>' : '<span class="text-[10px] font-semibold text-emerald-700">Préstamo pagado</span>'}
+                                <button type="button" data-loan-action="details" class="rounded-lg px-3 py-2 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-50">Ver detalles <span aria-hidden="true">›</span></button>
                             </div>
                         </div>
                     `;
+                    card.querySelectorAll('[data-loan-action]').forEach(button => {
+                        button.onclick = event => {
+                            event.stopPropagation();
+                            openLoan(button.dataset.loanAction === 'payment');
+                        };
+                    });
                     const toggle = card.querySelector('[data-card-toggle]');
                     toggle.onclick = event => {
                         event.stopPropagation();
@@ -3636,12 +3861,13 @@
             document.getElementById('dashTotalCollected').textContent = formatMoney(totals.collected);
             document.getElementById('dashTotalPendingCapital').textContent = formatMoney(totals.principal);
             document.getElementById('dashTotalClients').textContent = selectedClients.length;
-            document.getElementById('dashActiveLoansCount').textContent = `${totals.loans} préstamos${clientFilter.value === 'all' ? ' activos' : ' del cliente'}`;
+            document.getElementById('dashActiveLoansCount').textContent =
+                `${totals.loans} ${totals.loans === 1 ? 'préstamo' : 'préstamos'}${clientFilter.value === 'all' ? ' activos' : ' del cliente'}`;
             document.getElementById('dashMonthlyDue').textContent = formatMoney(totals.monthlyDue);
             document.getElementById('dashMonthlyCollected').textContent = formatMoney(totals.monthlyCollected);
             document.getElementById('dashSelectedMonthLabel').textContent = monthLabel;
             document.getElementById('dashboardFilterSummary').textContent =
-                `${clientFilter.value === 'all' ? 'Todos los clientes' : clientFilter.selectedOptions[0]?.textContent || 'Cliente'} · ${monthLabel}`;
+                `${visibleLoanCount} de ${totals.loans} préstamos · ${clientFilter.value === 'all' ? 'Todos los clientes' : clientFilter.selectedOptions[0]?.textContent || 'Cliente'} · ${monthLabel}`;
             const collapseToggle = document.getElementById('dashboardCollapseToggle');
             if (collapseToggle) collapseToggle.textContent = dashboardCardsCollapsed ? 'Expandir tarjetas' : 'Colapsar tarjetas';
             setDashboardPrivacy(dashboardAmountsHidden);
