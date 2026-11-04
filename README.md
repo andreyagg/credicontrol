@@ -9,6 +9,12 @@ CrediControl is a static web application hosted on Vercel. Client and loan recor
 3. Deploy the site. Vercel serves `index.html` from the repository root.
 4. Copy the production origin, such as `https://credicontrol.vercel.app`, for the Cloudflare Worker configuration below.
 
+## Install on iPhone
+
+After Vercel has deployed the latest commit, open the HTTPS site directly in **Safari** on the iPhone. Tap **Share** → **Add to Home Screen** → **Add**. If iOS shows an **Open as Web App** option, leave it enabled. CrediControl then opens from its home-screen icon in a standalone app window.
+
+The app still needs an internet connection to sign in and use Firebase/Cloudflare. The service worker caches only the static app shell and icons; it does not cache customer records or uploaded documents for offline use.
+
 ## Configure Firebase Authentication and Firestore
 
 1. In the Firebase console for `micarteradeprestamos`, enable **Authentication → Sign-in method → Email/Password**.

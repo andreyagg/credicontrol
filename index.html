@@ -2,9 +2,14 @@
 <html lang="es-CR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Gestor Multi-Cliente de Préstamos y Cartera - CrediControl</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="CrediControl">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#0f172a">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +19,9 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .overflow-y-auto, .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+        @supports (padding: env(safe-area-inset-bottom)) {
+            #mobileBottomNav { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+        }
         #pdfContent { font-size: 13px; line-height: 1.5; }
         #pdfContent .pdf-section-title { margin-bottom: 0.6rem; font-size: 12px; letter-spacing: 0.04em; }
         #pdfContent .pdf-details-table { font-size: 12px; }
@@ -65,6 +73,7 @@
                 <button id="authPasswordReset" type="button" onclick="resetFirebasePassword()" class="text-xs text-slate-500 hover:text-slate-700">Olvidé mi contraseña</button>
             </div>
             <p class="text-center text-[11px] text-slate-400">Sus préstamos se guardan en Firebase y sus archivos privados en Cloudflare.</p>
+            <p class="text-center text-[11px] leading-5 text-slate-500">Para instalar en iPhone: abre esta página en Safari, toca <strong>Compartir</strong> y elige <strong>Añadir a pantalla de inicio</strong>.</p>
         </form>
     </div>
 
@@ -2797,6 +2806,15 @@
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             document.body.removeChild(downloadAnchor);
+        }
+    </script>
+    <script>
+        if ('serviceWorker' in navigator && location.protocol === 'https:') {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js').catch(error => {
+                    console.error('CrediControl service worker registration failed:', error);
+                });
+            });
         }
     </script>
 </body>
